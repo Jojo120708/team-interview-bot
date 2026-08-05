@@ -412,6 +412,7 @@ document.addEventListener('DOMContentLoaded', function() {
       case 'toggleReason': toggleReason(btn.getAttribute('data-reason-name')); break;
       case 'pickNewReason': pickNewReason(btn.getAttribute('data-reason-name')); break;
       case 'submitInterview': submitInterview(); break;
+      case 'goBackToMissing': goBackToMissing(); break;
       case 'toggleDetail': toggleDetail(Number(btn.getAttribute('data-param'))); break;
       case 'setTimeFilter': setTimeFilter(btn.getAttribute('data-param')); break;
       case 'exportData': exportData(); break;
@@ -568,6 +569,7 @@ let selectedReasons = new Set(); // global: tracks multi-selected reasons on sel
 let dashboardTimeFilter = "day"; // "day" | "week" | "month"
 let dashboardDateFilter = (function(){ var d=new Date(); d.setDate(d.getDate()-1); return d.toISOString().split("T")[0]; })(); // default to yesterday
 let reasonIdCounter = 0;
+let isSubmitted = false; // prevents duplicate submissions
 function genReasonId() { return Date.now() + (++reasonIdCounter); }
 function findCategory(reasonName) {
   var cat = null;
@@ -1634,6 +1636,7 @@ function startInterview() {
   currentStep = 0;
   answers = { reasonList: [] };
   isAddingMore = false;
+  isSubmitted = false;
   selectedReasons.clear();
   document.getElementById("welcome").classList.add("hidden");
   document.getElementById("dashboard").classList.add("hidden");
@@ -2206,6 +2209,36 @@ function pickNewReason(reasonName) {
   renderReasonDetails();
 }
 
+// Check if ALL questions and reason details have been answered (for completion screen validation)
+function isAllAnswered() {
+  var visibleQs = getVisibleQuestions();
+  // Check all main questions
+  for (var i = 0; i < visibleQs.length; i++) {
+    var val = answers[visibleQs[i].id];
+    if (val === undefined || val === "") return false;
+  }
+  // Check all reason details
+  var reasonList = answers.reasonList || [];
+  for (var j = 0; j < reasonList.length; j++) {
+    var item = reasonList[j];
+    var cat = findCategory(item.reason);
+    if (!cat) return false;
+    var rd = item.data || {};
+    for (var k = 0; k < cat.fields.length; k++) {
+      var f = cat.fields[k];
+      var fval = rd[f];
+      if (f === 'productModel') {
+        if (fval === undefined || (typeof fval === 'string' && fval.trim() === "")) return false;
+      } else {
+        if (fval === undefined || fval === "" || Number(fval) <= 0) return false;
+      }
+    }
+    var note = item.note;
+    if (note === undefined || (typeof note === 'string' && note.trim() === "")) return false;
+  }
+  return true;
+}
+
 function renderCompletion() {
   const card = document.getElementById("question-card");
   const rate = pctNum(answers.actualValue, answers.targetValue);
@@ -2218,8 +2251,7 @@ function renderCompletion() {
     var plannedPH = calcPlannedPH();
     var actualPH = calcActualPH();
     var phRate = plannedPH > 0 ? (actualPH / plannedPH * 100) : 0;
-    html += '<div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#ECFDF5,#D1FAE5);display:flex;align-items:center;justify-content:center;margin:0 auto 20px"><svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:32px;height:32px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>';
-    html += '<h3 style="font-size:20px;color:#065F46;margin-bottom:8px">谢谢你们班组的努力，完成了目标</h3>';
+    html += '<h3 style="font-size:20px;color:#065F46;margin-bottom:8px">采访结束，请提交</h3>';
     html += '<p><strong>'+answers.teamName+'</strong> · '+answers.date+'</p>';
     html += '<p class="rate">产值达成率：<strong style="color:'+color+'">'+pct(answers.actualValue, answers.targetValue)+'%</strong></p>';
     // PH summary
@@ -2231,7 +2263,7 @@ function renderCompletion() {
     html += '</div>';
   } else {
     // Team did not meet the goal - show analysis summary
-    html += '<div class="completion-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div><h3>采访完成！</h3><p><strong>'+answers.teamName+'</strong> · '+answers.date+'</p><p class="rate">产值达成率：<strong style="color:'+color+'">'+pct(answers.actualValue, answers.targetValue)+'%</strong></p>';
+    html += '<h3>采访结束，请提交</h3><p><strong>'+answers.teamName+'</strong> · '+answers.date+'</p><p class="rate">产值达成率：<strong style="color:'+color+'">'+pct(answers.actualValue, answers.targetValue)+'%</strong></p>';
     var plannedPH = calcPlannedPH();
     var actualPH = calcActualPH();
     var phRate = plannedPH > 0 ? (actualPH / plannedPH * 100) : 0;
@@ -2248,7 +2280,51 @@ function renderCompletion() {
     html += '</div>';
   }
 
-  html += '<button class="btn-submit" data-action="submitInterview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> 提交并查看看板</button></div>';
+  // Check completeness for submit button
+  var allDone = isAllAnswered();
+  if (!allDone) {
+    // Build list of missing items
+    var missingList = [];
+    var visibleQs = getVisibleQuestions();
+    for (var mi = 0; mi < visibleQs.length; mi++) {
+      var q = visibleQs[mi];
+      var qval = answers[q.id];
+      if (qval === undefined || qval === "") missingList.push(q.label || q.id);
+    }
+    var reasonList = answers.reasonList || [];
+    for (var mj = 0; mj < reasonList.length; mj++) {
+      var mitem = reasonList[mj];
+      var mcat = findCategory(mitem.reason);
+      if (!mcat) continue;
+      var mrd = mitem.data || {};
+      var mfields = mcat.fields || [];
+      for (var mk = 0; mk < mfields.length; mk++) {
+        var mf = mfields[mk];
+        var mfval = mrd[mf];
+        if (mf === 'productModel') {
+          if (mfval === undefined || (typeof mfval === 'string' && mfval.trim() === "")) missingList.push(mitem.reason + ' - ' + (mcat.fieldLabels[mf] || mf));
+        } else {
+          if (mfval === undefined || mfval === "" || Number(mfval) <= 0) missingList.push(mitem.reason + ' - ' + (mcat.fieldLabels[mf] || mf));
+        }
+      }
+      var mnote = mitem.note;
+      if (mnote === undefined || (typeof mnote === 'string' && mnote.trim() === "")) missingList.push(mitem.reason + ' - 备注说明');
+    }
+    html += '<div style="margin:12px 0;padding:12px 14px;background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;text-align:left">';
+    html += '<div style="font-size:13px;font-weight:700;color:#991B1B;margin-bottom:6px">⚠️ 还有内容未填写，无法提交：</div>';
+    html += '<div style="font-size:12px;color:#B91C1C;line-height:1.6;max-height:120px;overflow-y:auto">';
+    for (var mm = 0; mm < missingList.length; mm++) {
+      html += '<div>• ' + missingList[mm] + '</div>';
+    }
+    html += '</div></div>';
+    html += '<button class="btn-submit" disabled style="opacity:0.5;cursor:not-allowed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> 请先完成所有问题</button>';
+    html += '<button class="btn-submit" data-action="goBackToMissing" style="background:#F59E0B;margin-top:8px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> 返回修改</button>';
+  } else if (isSubmitted) {
+    html += '<button class="btn-submit" disabled style="opacity:0.5;cursor:not-allowed;background:#9CA3AF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> 已提交</button>';
+  } else {
+    html += '<button class="btn-submit" data-action="submitInterview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> 提交并查看看板</button>';
+  }
+  html += '</div>';
   card.innerHTML = html;
 }
 
@@ -2510,7 +2586,49 @@ function goPrev() {
   }
 }
 
+// Navigate back to the first unanswered question or incomplete reason detail
+function goBackToMissing() {
+  var visibleQs = getVisibleQuestions();
+  // Check main questions
+  for (var i = 0; i < visibleQs.length; i++) {
+    var val = answers[visibleQs[i].id];
+    if (val === undefined || val === "") {
+      currentStep = i;
+      renderInterview();
+      return;
+    }
+  }
+  // Check reason details
+  var reasonList = answers.reasonList || [];
+  for (var j = 0; j < reasonList.length; j++) {
+    var item = reasonList[j];
+    var cat = findCategory(item.reason);
+    if (!cat) continue;
+    var rd = item.data || {};
+    var hasMissing = false;
+    for (var k = 0; k < cat.fields.length; k++) {
+      var f = cat.fields[k];
+      var fval = rd[f];
+      if (f === 'productModel') {
+        if (fval === undefined || (typeof fval === 'string' && fval.trim() === "")) hasMissing = true;
+      } else {
+        if (fval === undefined || fval === "" || Number(fval) <= 0) hasMissing = true;
+      }
+    }
+    var note = item.note;
+    if (note === undefined || (typeof note === 'string' && note.trim() === "")) hasMissing = true;
+    if (hasMissing) {
+      currentStep = visibleQs.length + 2; // go to reason details step
+      renderInterview();
+      return;
+    }
+  }
+}
+
 function submitInterview() {
+  if (isSubmitted) return; // prevent duplicate submissions
+  if (!isAllAnswered()) return; // safety check: all questions must be answered
+  isSubmitted = true;
   var reasonList = answers.reasonList || [];
   var isDLE = isDLEMode();
   // Convert reasonList to abnormalReasons array format for storage
