@@ -1348,6 +1348,7 @@ function aggregateRecords(records, dimension) {
         actualValue: 0,
         standardHours: 0,
         actualHours: 0,
+        effectiveHours: 0,
         abnormalReasons: [],
         plannedPH: 0,
         actualPH: 0,
@@ -1355,6 +1356,7 @@ function aggregateRecords(records, dimension) {
         lossGap: 0,
         totalLossAnalyzed: 0,
         coverage: 0,
+        isDLE: r.isDLE || false,
         _count: 0,
         _reasonMap: {}
       };
@@ -1365,6 +1367,7 @@ function aggregateRecords(records, dimension) {
     g.actualValue += r.actualValue || 0;
     g.standardHours += r.standardHours || 0;
     g.actualHours += r.actualHours || 0;
+    g.effectiveHours += r.effectiveHours || 0;
     g._count++;
     // Merge abnormal reasons
     (r.abnormalReasons || []).forEach(function(a) {
@@ -1382,6 +1385,22 @@ function aggregateRecords(records, dimension) {
   return groupOrder.map(function(key) {
     var g = groups[key];
     g.abnormalReasons = Object.values(g._reasonMap);
+    // Detect DLE mode from team name (fallback for old records without isDLE flag)
+    if (g.teamName === "二部一课" || g.teamName === "二部二课") {
+      g.isDLE = true;
+    }
+    if (g.isDLE) {
+      // DLE mode: DLE = effectiveHours / actualHours
+      var eh = g.effectiveHours || 0;
+      var ah = g.actualHours || 0;
+      g.dle = ah > 0 ? eh / ah : 0;
+      var dleThr = g.teamName === "二部二课" ? 0.80 : 0.75;
+      var expectedHours = dleThr > 0 ? eh / dleThr : ah;
+      g.lossGap = ah - expectedHours;
+      var totalLoss = g.abnormalReasons.reduce(function(s, a) { return s + a.hours; }, 0);
+      g.totalLossAnalyzed = totalLoss;
+      g.coverage = g.lossGap > 0 ? (totalLoss / g.lossGap) * 100 : 100;
+    } else {
     g.plannedPH = g.standardHours > 0 ? g.targetValue * 10000 / g.standardHours : 0;
     g.actualPH = g.actualHours > 0 ? g.actualValue * 10000 / g.actualHours : 0;
     var tv = g.targetValue, av = g.actualValue, sh = g.standardHours, ah = g.actualHours;
@@ -1396,6 +1415,7 @@ function aggregateRecords(records, dimension) {
     var totalLoss = g.abnormalReasons.reduce(function(s, a) { return s + a.hours; }, 0);
     g.totalLossAnalyzed = totalLoss;
     g.coverage = g.lossGap > 0 ? (totalLoss / g.lossGap) * 100 : 100;
+    }
     return g;
   });
 }
@@ -2928,8 +2948,9 @@ function renderDashboard() {
     var submitTimeCell = '<td style="color:#6B7280;font-size:12px;white-space:nowrap">'+(r.submitTime||'—')+'</td>';
     var detailColspan = isDayView ? 19 : 18;
     var rowHtml = '';
+    var isDLERecord = r.isDLE || r.teamName === "二部一课" || r.teamName === "二部二课";
 
-    if (r.isDLE) {
+    if (isDLERecord) {
       // DLE mode record
       var dle = r.dle || 0;
       var dlePct = (dle * 100).toFixed(1);
@@ -2954,7 +2975,7 @@ function renderDashboard() {
       rowHtml += '<td style="color:#9CA3AF;font-weight:600">—</td>'; // 实际人时产值
       rowHtml += '<td style="color:#4F46E5;font-weight:600">'+(dleThr*100).toFixed(0)+'%</td>'; // 目标DLE
       rowHtml += '<td style="font-weight:600;color:'+dleColor+'">'+dlePct+'%</td>'; // 实际DLE
-      rowHtml += '<td style="color:#6B7280">'+eh+'h</td>'; // 有效工时
+      rowHtml += '<td style="color:#9CA3AF;font-weight:600">—</td>'; // 计划工时
       rowHtml += '<td style="color:#374151">'+ah+'h</td>'; // 实际工时
       rowHtml += '<td style="color:#6B7280">'+eh+'h</td>'; // 标准工时
       rowHtml += '<td style="color:#9CA3AF;font-weight:600">—</td>'; // 偏差
