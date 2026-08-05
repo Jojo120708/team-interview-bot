@@ -478,7 +478,7 @@ const REASON_CATEGORIES = [
     desc: "影响工时 × 影响人数 = 合计影响工时",
     options: ["其他原因"],
     fields: ["impactHours","affectedPeople"],
-    fieldLabels: { impactHours:"影响工时（小时）", affectedPeople:"影响人数（人）" },
+    fieldLabels: { impactHours:"每人影响工时（小时）", affectedPeople:"影响人数（人）" },
     notePlaceholders: {
       "其他原因": "请说明具体原因及影响范围"
     },
@@ -1450,6 +1450,13 @@ function calcHoursGapSimple() {
   return ah - expectedHours;
 }
 function calcLossGap() {
+  if (isDLEMode()) {
+    var eh = Number(answers.effectiveHours) || 0;
+    var ah = Number(answers.actualHours) || 0;
+    var thr = getDLEThreshold();
+    var expectedHours = thr > 0 ? eh / thr : ah;
+    return ah - expectedHours;
+  }
   var hoursGap = calcHoursGapSimple();
   return hoursGap * 0.9;
 }
@@ -1882,8 +1889,27 @@ function renderReasonDetails() {
   const card = document.getElementById("question-card");
   let html = '<div class="question-header"><div class="question-icon danger"><svg viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><span class="question-label">填写各异常原因的详细信息</span></div>';
 
-  // Show 人时产值 coverage info if actual PH < planned PH
-  if (isActualPHBelowPlanned()) {
+  // Show coverage info
+  if (isDLEMode()) {
+    // DLE mode: show planned DLE, actual DLE, hours gap
+    var dle = calcDLE();
+    var dlePct = (dle * 100).toFixed(1);
+    var thr = getDLEThreshold();
+    var thrPct = (thr * 100).toFixed(0);
+    var eh = Number(answers.effectiveHours) || 0;
+    var ah = Number(answers.actualHours) || 0;
+    var expectedHours = thr > 0 ? eh / thr : ah;
+    var dleHoursGap = ah - expectedHours;
+    var totalLoss = getTotalLossHours();
+    var cov = dleHoursGap > 0 ? (totalLoss / dleHoursGap) * 100 : 100;
+    var covColor = cov >= 90 ? '#10B981' : cov >= 60 ? '#F59E0B' : '#EF4444';
+    html += '<div class="analysis-grid">';
+    html += '<div class="analysis-item"><div class="analysis-item-label">计划DLE</div><div class="analysis-item-value" style="color:#4F46E5">'+thrPct+'%</div><div class="analysis-item-sub">'+(answers.teamName === "二部二课" ? "二部二课标准" : "二部一课标准")+'</div></div>';
+    html += '<div class="analysis-item"><div class="analysis-item-label">实际DLE</div><div class="analysis-item-value" style="color:'+(dle<thr?'#EF4444':'#10B981')+'">'+dlePct+'%</div><div class="analysis-item-sub">有效工时/实际工时</div></div>';
+    html += '</div>';
+    html += '<div style="padding:10px 14px;background:#FEF2F2;border-radius:10px;margin-bottom:12px;font-size:13px;color:#991B1B">工时差距：<strong>'+dleHoursGap.toFixed(1)+'</strong> 小时（实际工时 '+ah+'h − 有效工时 '+eh+'h / '+thrPct+'%）</div>';
+    html += '<div class="coverage-bar-wrap"><div class="coverage-text" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:13px;color:#6B7280">已分析覆盖率（需≥90%）</span><span style="font-size:13px;font-weight:700;color:'+covColor+'">'+totalLoss.toFixed(1)+' / '+dleHoursGap.toFixed(1)+' 小时 ('+cov.toFixed(0)+'%)</span></div><div class="coverage-bar"><div class="coverage-bar-fill" style="width:'+Math.min(cov,100)+'%;background:'+covColor+'"></div></div></div>';
+  } else if (isActualPHBelowPlanned()) {
     var plannedPH = calcPlannedPH();
     var actualPH = calcActualPH();
     var hoursGap = calcHoursGapSimple();
@@ -2029,9 +2055,6 @@ function renderReasonDetails() {
 
 function renderMoreAnalysis() {
   const card = document.getElementById("question-card");
-  const plannedPH = calcPlannedPH();
-  const actualPH = calcActualPH();
-  const hoursGap = calcHoursGapSimple();
   const lossGap = calcLossGap();
   const totalLoss = getTotalLossHours();
   const cov = getCoveragePct();
@@ -2040,13 +2063,32 @@ function renderMoreAnalysis() {
 
   let html = '<div class="question-header"><div class="question-icon danger"><svg viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div><span class="question-label">差距分析：还需补充损失工时</span></div>';
 
-  // Analysis summary
-  html += '<div class="analysis-grid">';
-  html += '<div class="analysis-item warn"><div class="analysis-item-label">计划人时产值</div><div class="analysis-item-value" style="color:#4F46E5">'+fmtPH(plannedPH)+'</div></div>';
-  html += '<div class="analysis-item warn"><div class="analysis-item-label">实际人时产值</div><div class="analysis-item-value" style="color:#EF4444">'+fmtPH(actualPH)+'</div></div>';
-  html += '</div>';
-
-  html += '<div style="padding:10px 14px;background:#FEF2F2;border-radius:10px;margin-bottom:12px;font-size:13px;color:#991B1B">工时差距：<strong>'+hoursGap.toFixed(1)+'</strong> 小时</div>';
+  if (isDLEMode()) {
+    // DLE mode: show planned/actual DLE
+    var dle = calcDLE();
+    var dlePct = (dle * 100).toFixed(1);
+    var thr = getDLEThreshold();
+    var thrPct = (thr * 100).toFixed(0);
+    var eh = Number(answers.effectiveHours) || 0;
+    var ah = Number(answers.actualHours) || 0;
+    var expectedHours = thr > 0 ? eh / thr : ah;
+    var dleHoursGap = ah - expectedHours;
+    html += '<div class="analysis-grid">';
+    html += '<div class="analysis-item"><div class="analysis-item-label">计划DLE</div><div class="analysis-item-value" style="color:#4F46E5">'+thrPct+'%</div><div class="analysis-item-sub">'+(answers.teamName === "二部二课" ? "二部二课标准" : "二部一课标准")+'</div></div>';
+    html += '<div class="analysis-item"><div class="analysis-item-label">实际DLE</div><div class="analysis-item-value" style="color:'+(dle<thr?'#EF4444':'#10B981')+'">'+dlePct+'%</div><div class="analysis-item-sub">有效工时/实际工时</div></div>';
+    html += '</div>';
+    html += '<div style="padding:10px 14px;background:#FEF2F2;border-radius:10px;margin-bottom:12px;font-size:13px;color:#991B1B">工时差距：<strong>'+dleHoursGap.toFixed(1)+'</strong> 小时（实际工时 '+ah+'h − 有效工时 '+eh+'h / '+thrPct+'%）</div>';
+  } else {
+    // Normal mode
+    const plannedPH = calcPlannedPH();
+    const actualPH = calcActualPH();
+    const hoursGap = calcHoursGapSimple();
+    html += '<div class="analysis-grid">';
+    html += '<div class="analysis-item warn"><div class="analysis-item-label">计划人时产值</div><div class="analysis-item-value" style="color:#4F46E5">'+fmtPH(plannedPH)+'</div></div>';
+    html += '<div class="analysis-item warn"><div class="analysis-item-label">实际人时产值</div><div class="analysis-item-value" style="color:#EF4444">'+fmtPH(actualPH)+'</div></div>';
+    html += '</div>';
+    html += '<div style="padding:10px 14px;background:#FEF2F2;border-radius:10px;margin-bottom:12px;font-size:13px;color:#991B1B">工时差距：<strong>'+hoursGap.toFixed(1)+'</strong> 小时</div>';
+  }
 
   // Coverage bar
   html += '<div class="coverage-bar-wrap"><div class="coverage-text" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:13px;color:#6B7280">已分析覆盖率</span><span style="font-size:13px;font-weight:700;color:'+covColor+'">'+totalLoss.toFixed(1)+' / '+lossGap.toFixed(1)+' 小时 ('+cov.toFixed(0)+'%)</span></div><div class="coverage-bar"><div class="coverage-bar-fill" style="width:'+Math.min(cov,100)+'%;background:'+covColor+'"></div></div></div>';
@@ -2465,8 +2507,10 @@ function submitInterview() {
     var dle = calcDLE();
     var eh = Number(answers.effectiveHours) || 0;
     var ah = Number(answers.actualHours) || 0;
-    // For DLE mode, lossGap = actual - effective (the gap to analyze)
-    var dleLossGap = ah - eh;
+    var thr = getDLEThreshold();
+    var expectedHours = thr > 0 ? eh / thr : ah;
+    // For DLE mode, lossGap = actualHours - effectiveHours/threshold
+    var dleLossGap = ah - expectedHours;
     var coverage = dleLossGap > 0 ? (totalLoss / dleLossGap) * 100 : 100;
     record = {
       id: Date.now(),
