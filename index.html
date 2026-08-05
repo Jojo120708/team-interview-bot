@@ -3052,9 +3052,14 @@ function renderDashboard() {
   html += '<div class="chart-card"><h3>工时对比分析</h3><div class="chart-container"><canvas id="chart-hours"></canvas></div></div>';
   html += '</div>';
 
-  // Charts Row 2
+  // Charts Row 2 - DLE chart for DLE teams only
   html += '<div class="chart-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">';
+  html += '<div class="chart-card"><h3>DLE对比分析（二部一课/二部二课）</h3><div class="chart-container"><canvas id="chart-dle"></canvas></div></div>';
   html += '<div class="chart-card"><h3>各'+(dashboardTimeFilter === "day" ? "班组" : "时段")+'达成率</h3><div class="chart-container"><canvas id="chart-completion"></canvas></div></div>';
+  html += '</div>';
+
+  // Charts Row 3 - Reasons chart
+  html += '<div class="chart-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">';
   html += '<div class="chart-card"><h3>异常原因分布</h3><div class="chart-container"><canvas id="chart-reasons"></canvas></div></div>';
   html += '</div>';
 
@@ -3175,10 +3180,17 @@ function renderDashboard() {
 
   // Draw charts after DOM update
   setTimeout(() => {
-    // Filter out DLE records from production/completion charts (they have no 产值 data)
-    var chartDataNormal = displayData.filter(function(r) { return !r.isDLE; });
+    // Filter out DLE records from production/completion/hours charts (they have no 产值 data)
+    var chartDataNormal = displayData.filter(function(r) {
+      return !r.isDLE && r.teamName !== "二部一课" && r.teamName !== "二部二课";
+    });
+    // DLE teams only
+    var chartDataDLE = displayData.filter(function(r) {
+      return r.isDLE || r.teamName === "二部一课" || r.teamName === "二部二课";
+    });
     drawProductionChart(chartDataNormal);
-    drawHoursChart(displayData); // Hours chart includes all records
+    drawHoursChart(chartDataNormal); // Hours chart excludes DLE teams
+    drawDLEChart(chartDataDLE); // New DLE chart for DLE teams only
     drawCompletionChart(chartDataNormal);
     drawReasonsChart(reasonPie);
   }, 50);
@@ -3374,6 +3386,107 @@ function drawHoursChart(data) {
     ctx.textAlign = "left";
     ctx.fillText(l[1], padding.left + i * 80 + 16, h - 5);
   });
+}
+
+function drawDLEChart(data) {
+  const canvas = document.getElementById("chart-dle");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width * 2;
+  canvas.height = rect.height * 2;
+  ctx.scale(2, 2);
+  const w = rect.width;
+  const h = rect.height;
+
+  const padding = { top: 32, right: 20, bottom: 40, left: 60 };
+  const chartW = w - padding.left - padding.right;
+  const chartH = h - padding.top - padding.bottom;
+
+  if (data.length === 0) {
+    ctx.fillStyle = "#9CA3AF";
+    ctx.font = "14px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("暂无DLE数据", w / 2, h / 2);
+    return;
+  }
+
+  // DLE is a percentage (0-100), use fixed max of 100%
+  const maxVal = 100;
+  const barWidth = chartW / data.length / 3;
+  const groupWidth = chartW / data.length;
+
+  // Grid lines (0%, 25%, 50%, 75%, 100%)
+  ctx.strokeStyle = "#F3F4F6";
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = padding.top + (chartH / 4) * i;
+    ctx.beginPath();
+    ctx.moveTo(padding.left, y);
+    ctx.lineTo(w - padding.right, y);
+    ctx.stroke();
+    ctx.fillStyle = "#6B7280";
+    ctx.font = "11px sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(((maxVal / 4) * (4 - i)).toFixed(0) + "%", padding.left - 8, y + 4);
+  }
+
+  // Bars
+  data.forEach((r, i) => {
+    const x = padding.left + groupWidth * i + groupWidth / 2;
+    var dle = r.dle || 0;
+    var dlePct = dle * 100;
+    var dleThr = (r.teamName === "二部二课") ? 80 : 75;
+    var thrH = (dleThr / maxVal) * chartH;
+    var dleH = (dlePct / maxVal) * chartH;
+
+    // Target DLE bar
+    ctx.fillStyle = "#C7D2FE";
+    ctx.beginPath();
+    ctx.roundRect(x - barWidth - 2, padding.top + chartH - thrH, barWidth, thrH, [4, 4, 0, 0]);
+    ctx.fill();
+
+    // Target DLE label
+    ctx.fillStyle = "#9CA3AF";
+    ctx.font = "9px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(dleThr.toFixed(0) + "%", x - barWidth / 2 - 2, padding.top + chartH - thrH - 3);
+
+    // Actual DLE bar
+    var dleColor = dlePct < dleThr ? "#EF4444" : "#10B981";
+    ctx.fillStyle = dleColor;
+    ctx.beginPath();
+    ctx.roundRect(x + 2, padding.top + chartH - dleH, barWidth, dleH, [4, 4, 0, 0]);
+    ctx.fill();
+
+    // Actual DLE label
+    ctx.fillStyle = dleColor;
+    ctx.font = "9px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(dlePct.toFixed(1) + "%", x + barWidth / 2 + 2, padding.top + chartH - dleH - 3);
+
+    // Label
+    ctx.fillStyle = "#6B7280";
+    ctx.font = "12px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(r.teamName, x, h - padding.bottom + 20);
+  });
+
+  // Legend
+  ctx.fillStyle = "#C7D2FE";
+  ctx.fillRect(padding.left, h - 15, 12, 12);
+  ctx.fillStyle = "#6B7280";
+  ctx.font = "11px sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText("目标DLE", padding.left + 16, h - 5);
+  ctx.fillStyle = "#10B981";
+  ctx.fillRect(padding.left + 80, h - 15, 12, 12);
+  ctx.fillStyle = "#6B7280";
+  ctx.fillText("实际DLE(达标)", padding.left + 96, h - 5);
+  ctx.fillStyle = "#EF4444";
+  ctx.fillRect(padding.left + 190, h - 15, 12, 12);
+  ctx.fillStyle = "#6B7280";
+  ctx.fillText("实际DLE(未达标)", padding.left + 206, h - 5);
 }
 
 function drawCompletionChart(data) {
