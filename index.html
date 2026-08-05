@@ -2956,7 +2956,7 @@ function renderDashboard() {
       rowHtml += '<td style="font-weight:600;color:'+dleColor+'">'+dlePct+'%</td>'; // 实际DLE
       rowHtml += '<td style="color:#6B7280">'+eh+'h</td>'; // 有效工时
       rowHtml += '<td style="color:#374151">'+ah+'h</td>'; // 实际工时
-      rowHtml += '<td style="color:#9CA3AF;font-weight:600">—</td>'; // 标准工时
+      rowHtml += '<td style="color:#6B7280">'+eh+'h</td>'; // 标准工时
       rowHtml += '<td style="color:#9CA3AF;font-weight:600">—</td>'; // 偏差
       rowHtml += '<td style="font-weight:600;color:'+(lossHours>0?"#EF4444":"#10B981")+'">'+lossHours.toFixed(1)+'h</td>'; // 损失工时
       rowHtml += '<td style="font-weight:600;color:'+covColor+'">'+rCoverage.toFixed(0)+'%</td>'; // 差距覆盖
@@ -2997,7 +2997,7 @@ function renderDashboard() {
         }
       }
       var covCell = isLowTarget ? '<td style="color:#9CA3AF">—</td>' : '<td style="font-weight:600;color:'+covColor+'">'+rCoverage.toFixed(0)+'%</td>';
-      rowHtml += '<td style="font-weight:600;color:#111827">'+displayName+'</td>'+submitTimeCell+dateCell+'<td style="color:#374151">'+fmtW(r.targetValue)+'</td><td style="font-weight:500;color:#111827">'+fmtW(r.actualValue)+'</td>'+compRateCell+'<td style="color:#4F46E5;font-weight:600">'+fmtPH(rPlannedPH)+'</td><td style="color:'+phColor+';font-weight:600">'+fmtPH(rActualPH)+'</td><td style="color:#9CA3AF;font-weight:600">—</td><td style="color:#9CA3AF;font-weight:600">—</td><td style="color:#6B7280">'+r.standardHours+'h</td><td style="color:#374151">'+r.actualHours+'h</td><td style="color:#6B7280">'+r.standardHours+'h</td>'+devDisplay+'<td style="font-weight:600;color:'+(lossHours>0?"#EF4444":"#10B981")+'">'+lossHours.toFixed(1)+'h</td>'+covCell+outputStatusBadge+efficiencyStatusBadge;
+      rowHtml += '<td style="font-weight:600;color:#111827">'+displayName+'</td>'+submitTimeCell+dateCell+'<td style="color:#374151">'+fmtW(r.targetValue)+'</td><td style="font-weight:500;color:#111827">'+fmtW(r.actualValue)+'</td>'+compRateCell+'<td style="color:#4F46E5;font-weight:600">'+fmtPH(rPlannedPH)+'</td><td style="color:'+phColor+';font-weight:600">'+fmtPH(rActualPH)+'</td><td style="color:#9CA3AF;font-weight:600">—</td><td style="color:#9CA3AF;font-weight:600">—</td><td style="color:#6B7280">'+r.standardHours+'h</td><td style="color:#374151">'+r.actualHours+'h</td><td style="color:#9CA3AF;font-weight:600">—</td>'+devDisplay+'<td style="font-weight:600;color:'+(lossHours>0?"#EF4444":"#10B981")+'">'+lossHours.toFixed(1)+'h</td>'+covCell+outputStatusBadge+efficiencyStatusBadge;
     }
     rowHtml += '<td>'+(r.abnormalReasons.length>0?'<button class="btn-detail" data-action="toggleDetail" data-param="'+r.id+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> '+(expanded?"收起":"详情")+'</button>':'')+'</td>';
     html += '<tr>'+rowHtml+'</tr>';
