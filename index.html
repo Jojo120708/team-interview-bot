@@ -1537,7 +1537,15 @@ function showWelcome() {
 }
 function setTimeFilter(dimension) {
   dashboardTimeFilter = dimension;
-  dashboardDateFilter = (function(){ var d=new Date(); d.setDate(d.getDate()-1); return d.toISOString().split("T")[0]; })(); // reset to yesterday
+  var now = new Date();
+  if (dimension === "day") {
+    var d = new Date(); d.setDate(d.getDate()-1);
+    dashboardDateFilter = d.toISOString().split("T")[0];
+  } else if (dimension === "week") {
+    dashboardDateFilter = getISOWeek(now.toISOString().split("T")[0]);
+  } else {
+    dashboardDateFilter = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,"0");
+  }
   // Update button active states
   document.querySelectorAll('.time-filter-btn').forEach(function(btn) {
     btn.classList.toggle('active', btn.getAttribute('data-param') === dimension);
