@@ -2919,14 +2919,14 @@ function renderDashboard() {
   var dateColHeader = isDayView ? '<th>日期</th>' : '';
   var recordLabel = isDayView ? displayData.length + ' 条记录' : displayData.length + ' 个班组';
   var exportBtn = '<button class="btn-export" data-action="exportData" style="margin-left:auto;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>导出明细数据</button>';
-  html += '<div class="table-card"><div class="table-header" style="display:flex;align-items:center;"><h3>'+tableTitle+'</h3><span style="margin-left:8px;">'+recordLabel+'</span>'+exportBtn+'</div><div class="table-wrap"><table><thead><tr><th>班组</th><th>提交时间</th>'+dateColHeader+'<th>目标产值(万元)</th><th>实际产值(万元)</th><th>达成率</th><th>目标DLE</th><th>实际DLE</th><th>计划工时</th><th>实际工时</th><th>偏差</th><th>损失工时</th><th>差距覆盖</th><th>产值状态</th><th>效率状态</th><th></th></tr></thead><tbody>';
+  html += '<div class="table-card"><div class="table-header" style="display:flex;align-items:center;"><h3>'+tableTitle+'</h3><span style="margin-left:8px;">'+recordLabel+'</span>'+exportBtn+'</div><div class="table-wrap"><table><thead><tr><th>班组</th><th>提交时间</th>'+dateColHeader+'<th>目标产值(万元)</th><th>实际产值(万元)</th><th>达成率</th><th>计划人时产值</th><th>实际人时产值</th><th>目标DLE</th><th>实际DLE</th><th>计划工时</th><th>实际工时</th><th>偏差</th><th>损失工时</th><th>差距覆盖</th><th>产值状态</th><th>效率状态</th><th></th></tr></thead><tbody>';
   displayData.forEach(r => {
     const lossHours = r.abnormalReasons.reduce((s, a) => s + a.hours, 0);
     const expanded = showDetailId === r.id;
     const displayName = r.label || r.teamName;
     var dateCell = isDayView ? '<td style="color:#6B7280;white-space:nowrap">'+r.date+'</td>' : '';
     var submitTimeCell = '<td style="color:#6B7280;font-size:12px;white-space:nowrap">'+(r.submitTime||'—')+'</td>';
-    var detailColspan = isDayView ? 16 : 15;
+    var detailColspan = isDayView ? 18 : 17;
     var rowHtml = '';
 
     if (r.isDLE) {
@@ -2949,7 +2949,9 @@ function renderDashboard() {
       rowHtml += '<td style="font-weight:600;color:#111827">'+displayName+'</td>'+submitTimeCell+dateCell;
       rowHtml += '<td style="color:#9CA3AF;font-weight:600">—</td>'; // 目标产值
       rowHtml += '<td style="color:#9CA3AF;font-weight:600">—</td>'; // 实际产值
-      rowHtml += '<td style="font-weight:600;color:'+dleColor+'">'+dlePct+'%</td>'; // 达成率 → 实际DLE
+      rowHtml += '<td style="color:#9CA3AF;font-weight:600">—</td>'; // 达成率
+      rowHtml += '<td style="color:#9CA3AF;font-weight:600">—</td>'; // 计划人时产值
+      rowHtml += '<td style="color:#9CA3AF;font-weight:600">—</td>'; // 实际人时产值
       rowHtml += '<td style="color:#4F46E5;font-weight:600">'+(dleThr*100).toFixed(0)+'%</td>'; // 目标DLE
       rowHtml += '<td style="font-weight:600;color:'+dleColor+'">'+dlePct+'%</td>'; // 实际DLE
       rowHtml += '<td style="color:#6B7280">'+eh+'h</td>'; // 有效工时
@@ -2994,7 +2996,7 @@ function renderDashboard() {
         }
       }
       var covCell = isLowTarget ? '<td style="color:#9CA3AF">—</td>' : '<td style="font-weight:600;color:'+covColor+'">'+rCoverage.toFixed(0)+'%</td>';
-      rowHtml += '<td style="font-weight:600;color:#111827">'+displayName+'</td>'+submitTimeCell+dateCell+'<td style="color:#374151">'+fmtW(r.targetValue)+'</td><td style="font-weight:500;color:#111827">'+fmtW(r.actualValue)+'</td>'+compRateCell+'<td style="color:#9CA3AF;font-weight:600">—</td><td style="color:#9CA3AF;font-weight:600">—</td><td style="color:#6B7280">'+r.standardHours+'h</td><td style="color:#374151">'+r.actualHours+'h</td>'+devDisplay+'<td style="font-weight:600;color:'+(lossHours>0?"#EF4444":"#10B981")+'">'+lossHours.toFixed(1)+'h</td>'+covCell+outputStatusBadge+efficiencyStatusBadge;
+      rowHtml += '<td style="font-weight:600;color:#111827">'+displayName+'</td>'+submitTimeCell+dateCell+'<td style="color:#374151">'+fmtW(r.targetValue)+'</td><td style="font-weight:500;color:#111827">'+fmtW(r.actualValue)+'</td>'+compRateCell+'<td style="color:#4F46E5;font-weight:600">'+fmtPH(rPlannedPH)+'</td><td style="color:'+phColor+';font-weight:600">'+fmtPH(rActualPH)+'</td><td style="color:#9CA3AF;font-weight:600">—</td><td style="color:#9CA3AF;font-weight:600">—</td><td style="color:#6B7280">'+r.standardHours+'h</td><td style="color:#374151">'+r.actualHours+'h</td>'+devDisplay+'<td style="font-weight:600;color:'+(lossHours>0?"#EF4444":"#10B981")+'">'+lossHours.toFixed(1)+'h</td>'+covCell+outputStatusBadge+efficiencyStatusBadge;
     }
     rowHtml += '<td>'+(r.abnormalReasons.length>0?'<button class="btn-detail" data-action="toggleDetail" data-param="'+r.id+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> '+(expanded?"收起":"详情")+'</button>':'')+'</td>';
     html += '<tr>'+rowHtml+'</tr>';
