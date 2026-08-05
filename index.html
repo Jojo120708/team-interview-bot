@@ -1,0 +1,3325 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="format-detection" content="telephone=no" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<title>班组产值与工时采访系统</title>
+<!-- 钉钉 JSAPI SDK -->
+<script src="https://g.alicdn.com/dingding/dingtalk-jsapi/3.0.25/dingtalk.open.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif; background: #f5f5f5; }
+.hidden { display: none !important; }
+
+/* Welcome Page */
+#welcome { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #EEF2FF 0%, #F9FAFB 50%, #ECFDF5 100%); padding: 24px; }
+.welcome-card { background: #fff; border-radius: 24px; padding: 56px 48px; max-width: 520px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.08); text-align: center; }
+.welcome-icon { width: 80px; height: 80px; border-radius: 20px; background: linear-gradient(135deg, #4F46E5, #7C3AED); display: flex; align-items: center; justify-content: center; margin: 0 auto 28px; }
+.welcome-icon svg { width: 40px; height: 40px; }
+.welcome-card h1 { font-size: 28px; font-weight: 700; color: #111827; margin-bottom: 12px; }
+.welcome-card p { font-size: 16px; color: #6B7280; line-height: 1.7; margin-bottom: 36px; }
+.feature-tags { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin-bottom: 36px; }
+.feature-tag { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 12px; background: #F9FAFB; border: 1px solid #E5E7EB; font-size: 14px; color: #374151; font-weight: 500; }
+.feature-tag svg { width: 18px; height: 18px; }
+.btn-primary { background: linear-gradient(135deg, #4F46E5, #7C3AED); color: #fff; border: none; border-radius: 14px; padding: 14px 40px; font-size: 16px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 10px; box-shadow: 0 4px 14px rgba(79,70,229,0.35); transition: transform 0.15s, box-shadow 0.15s; }
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(79,70,229,0.45); }
+.btn-primary svg { width: 18px; height: 18px; }
+.btn-link { background: none; border: none; color: #4F46E5; font-size: 14px; cursor: pointer; font-weight: 500; margin-top: 20px; }
+
+/* Interview Page */
+#interview { min-height: 100vh; background: #F3F4F6; display: flex; justify-content: center; padding: 32px 16px; }
+.interview-container { max-width: 640px; width: 100%; }
+.interview-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+.interview-header-left { display: flex; align-items: center; gap: 12px; }
+.interview-header-icon { width: 40px; height: 40px; border-radius: 12px; background: linear-gradient(135deg, #4F46E5, #7C3AED); display: flex; align-items: center; justify-content: center; }
+.interview-header-icon svg { width: 20px; height: 20px; }
+.interview-header-title { font-weight: 700; font-size: 18px; color: #111827; }
+.interview-header-sub { font-size: 13px; color: #9CA3AF; }
+.btn-exit { background: none; border: 1px solid #D1D5DB; border-radius: 8px; padding: 6px 14px; font-size: 13px; color: #6B7280; cursor: pointer; }
+.progress-bar { height: 4px; background: #E5E7EB; border-radius: 2px; margin-bottom: 28px; overflow: hidden; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, #4F46E5, #7C3AED); border-radius: 2px; transition: width 0.4s ease; }
+
+/* Chat Messages */
+.chat-history { display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px; }
+.chat-msg { display: flex; }
+.chat-msg.question { justify-content: flex-end; }
+.chat-msg.answer { justify-content: flex-start; }
+.chat-bubble { padding: 10px 16px; border-radius: 16px; max-width: 80%; font-size: 14px; }
+.chat-msg.question .chat-bubble { background: #4F46E5; color: #fff; border-radius: 16px 16px 4px 16px; font-weight: 500; box-shadow: 0 1px 3px rgba(79,70,229,0.2); }
+.chat-msg.answer .chat-bubble { background: #fff; color: #374151; border-radius: 16px 16px 16px 4px; border: 1px solid #E5E7EB; }
+
+/* Question Card */
+.question-card { background: #fff; border-radius: 20px; padding: 28px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); border: 1px solid #E5E7EB; }
+.question-header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+.question-icon { width: 36px; height: 36px; border-radius: 10px; background: #EEF2FF; display: flex; align-items: center; justify-content: center; }
+.question-icon svg { width: 18px; height: 18px; }
+.question-icon.warning { background: #FEF3C7; }
+.question-icon.warning svg { color: #D97706; }
+.question-icon.danger { background: #FEE2E2; }
+.question-icon.danger svg { color: #DC2626; }
+.question-label { font-size: 16px; font-weight: 600; color: #111827; }
+.question-input { width: 100%; padding: 12px 16px; border-radius: 12px; border: 1.5px solid #E5E7EB; font-size: 15px; outline: none; box-sizing: border-box; background: #FAFAFA; transition: border-color 0.2s, background 0.2s; }
+.question-input:focus { border-color: #4F46E5; background: #fff; }
+
+/* Reason Selection */
+.reason-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+.reason-btn { display: flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 10px; border: 1.5px solid #E5E7EB; background: #fff; cursor: pointer; font-size: 14px; color: #6B7280; transition: all 0.15s; }
+.reason-btn.selected { border-color: var(--reason-color); background: var(--reason-bg); color: var(--reason-color); font-weight: 600; }
+.reason-btn svg { width: 15px; height: 15px; }
+.reason-hint { font-size: 13px; color: #9CA3AF; margin-top: 14px; }
+
+/* Reason Detail */
+.reason-detail-list { display: flex; flex-direction: column; gap: 14px; }
+.reason-detail-item { display: flex; align-items: center; gap: 12px; }
+.reason-detail-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.reason-detail-icon svg { width: 16px; height: 16px; }
+.reason-detail-label { font-size: 14px; font-weight: 500; color: #374151; min-width: 80px; }
+.reason-detail-input-wrap { flex: 1; position: relative; }
+.reason-detail-input { width: 100%; padding: 10px 40px 10px 14px; border-radius: 10px; border: 1.5px solid #E5E7EB; font-size: 14px; outline: none; box-sizing: border-box; background: #FAFAFA; }
+.reason-detail-input:focus { border-color: var(--reason-color); background: #fff; }
+.reason-detail-unit { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); font-size: 13px; color: #9CA3AF; }
+.reason-detail-note { width: 100%; margin-top: 6px; padding: 8px 12px; border-radius: 8px; border: 1.5px solid #E5E7EB; font-size: 13px; outline: none; box-sizing: border-box; background: #FAFAFA; resize: vertical; min-height: 36px; font-family: inherit; }
+.reason-detail-note:focus { border-color: var(--reason-color); background: #fff; }
+.reason-detail-note::placeholder { color: #C0C4CC; }
+.reason-field-input { flex: 1; padding: 10px 14px; border-radius: 10px; border: 1.5px solid #E5E7EB; font-size: 14px; outline: none; box-sizing: border-box; background: #FAFAFA; transition: border-color 0.2s, background 0.2s; }
+.reason-field-input:focus { border-color: var(--reason-color); background: #fff; }
+.loss-total { margin-top: 16px; padding: 10px 14px; background: #FEF2F2; border-radius: 10px; font-size: 13px; color: #991B1B; }
+.loss-total strong { font-weight: 700; }
+
+/* Completion */
+.completion { text-align: center; padding: 12px 0; }
+.completion-icon { width: 56px; height: 56px; border-radius: 50%; background: #ECFDF5; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
+.completion-icon svg { width: 28px; height: 28px; color: #10B981; }
+.completion h3 { font-size: 18px; font-weight: 700; color: #111827; margin-bottom: 8px; }
+.completion p { font-size: 14px; color: #6B7280; margin-bottom: 4px; }
+.completion .rate { font-size: 14px; color: #6B7280; margin-bottom: 16px; }
+.completion .rate strong { font-weight: 700; }
+.btn-submit { background: linear-gradient(135deg, #10B981, #059669); color: #fff; border: none; border-radius: 12px; padding: 12px 32px; font-size: 15px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 14px rgba(16,185,129,0.3); }
+.btn-submit svg { width: 18px; height: 18px; }
+
+/* Navigation */
+.nav-buttons { display: flex; justify-content: space-between; margin-top: 24px; }
+.btn-nav { display: flex; align-items: center; gap: 6px; padding: 10px 20px; border-radius: 10px; font-size: 14px; cursor: pointer; transition: all 0.15s; }
+.btn-nav:disabled { cursor: not-allowed; }
+.btn-prev { border: 1px solid #D1D5DB; background: #fff; color: #374151; }
+.btn-prev:disabled { color: #D1D5DB; }
+.btn-next { border: none; background: #4F46E5; color: #fff; font-weight: 500; }
+.btn-next:disabled { background: #E5E7EB; color: #9CA3AF; }
+.btn-next.primary { background: linear-gradient(135deg, #4F46E5, #7C3AED); font-weight: 600; box-shadow: 0 2px 8px rgba(79,70,229,0.3); }
+.btn-next.primary:disabled { background: #E5E7EB; color: #9CA3AF; box-shadow: none; }
+.btn-nav svg { width: 16px; height: 16px; }
+
+/* Dashboard */
+#dashboard { min-height: 100vh; background: #F3F4F6; }
+.dashboard-header { background: #fff; border-bottom: 1px solid #E5E7EB; padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+.dashboard-header-left { display: flex; align-items: center; gap: 12px; }
+.dashboard-header-icon { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, #4F46E5, #7C3AED); display: flex; align-items: center; justify-content: center; }
+.dashboard-header-icon svg { width: 18px; height: 18px; }
+.dashboard-header-title { font-weight: 700; font-size: 17px; color: #111827; }
+.dashboard-header-sub { font-size: 13px; color: #6B7280; margin-top: 2px; }
+.dashboard-header-actions { display: flex; gap: 10px; align-items: center; }
+.time-filter-toggle { display: flex; border-radius: 14px; background: #F3F4F6; gap: 6px; padding: 5px; border: none; }
+.time-filter-btn { padding: 8px 18px; border: 2px solid transparent; border-radius: 10px; background: transparent; font-size: 14px; color: #6B7280; cursor: pointer; transition: all 0.2s; font-weight: 600; position: relative; }
+.time-filter-btn:hover { transform: translateY(-1px); }
+.time-filter-btn[data-param="day"] { color: #2563EB; }
+.time-filter-btn[data-param="day"]:hover { background: rgba(37,99,235,0.08); }
+.time-filter-btn[data-param="day"].active { background: #2563EB; color: #fff; border-color: #1D4ED8; box-shadow: 0 3px 10px rgba(37,99,235,0.4); }
+.time-filter-btn[data-param="week"] { color: #7C3AED; }
+.time-filter-btn[data-param="week"]:hover { background: rgba(124,58,237,0.08); }
+.time-filter-btn[data-param="week"].active { background: #7C3AED; color: #fff; border-color: #6D28D9; box-shadow: 0 3px 10px rgba(124,58,237,0.4); }
+.time-filter-btn[data-param="month"] { color: #059669; }
+.time-filter-btn[data-param="month"]:hover { background: rgba(5,150,105,0.08); }
+.time-filter-btn[data-param="month"].active { background: #059669; color: #fff; border-color: #047857; box-shadow: 0 3px 10px rgba(5,150,105,0.4); }
+.date-picker-wrap { display: flex; align-items: center; gap: 8px; margin-left: 8px; }
+.date-picker-wrap label { font-size: 13px; color: #6B7280; font-weight: 500; white-space: nowrap; }
+.date-picker-input { padding: 8px 12px; border: 1.5px solid #D1D5DB; border-radius: 8px; font-size: 14px; color: #374151; background: #fff; outline: none; transition: border-color 0.2s; }
+.date-picker-input:focus { border-color: #4F46E5; }
+.btn-add { display: flex; align-items: center; gap: 6px; padding: 8px 18px; border-radius: 10px; border: none; background: linear-gradient(135deg, #4F46E5, #7C3AED); color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 8px rgba(79,70,229,0.25); }
+.btn-add svg { width: 15px; height: 15px; }
+.btn-home { padding: 8px 14px; border-radius: 10px; border: 1px solid #D1D5DB; background: #fff; font-size: 13px; color: #6B7280; cursor: pointer; }
+.btn-export { display: flex; align-items: center; gap: 6px; padding: 8px 18px; border-radius: 10px; border: none; background: linear-gradient(135deg, #059669, #10B981); color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 8px rgba(5,150,105,0.25); }
+.btn-export svg { width: 15px; height: 15px; }
+.dashboard-content { padding: 24px 28px; max-width: 1200px; margin: 0 auto; }
+
+/* KPI Cards */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.kpi-card { background: #fff; border-radius: 16px; padding: 20px 22px; border: 1px solid #E5E7EB; }
+.kpi-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.kpi-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+.kpi-icon svg { width: 18px; height: 18px; }
+.kpi-label { font-size: 13px; color: #6B7280; }
+.kpi-value { font-size: 28px; font-weight: 700; color: #111827; }
+.kpi-sub { font-size: 12px; color: #9CA3AF; margin-top: 4px; }
+
+/* Chart Cards */
+.chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; margin-bottom: 16px; }
+.chart-card { background: #fff; border-radius: 16px; padding: 20px 22px; border: 1px solid #E5E7EB; }
+.chart-card h3 { font-size: 15px; font-weight: 600; color: #111827; margin-bottom: 16px; margin-top: 0; }
+.chart-container { width: 100%; height: 260px; }
+.chart-container canvas { width: 100% !important; height: 100% !important; }
+
+/* Data Table */
+.table-card { background: #fff; border-radius: 16px; border: 1px solid #E5E7EB; overflow: hidden; }
+.table-header { padding: 16px 22px; border-bottom: 1px solid #E5E7EB; display: flex; align-items: center; justify-content: space-between; }
+.table-header h3 { font-size: 15px; font-weight: 600; color: #111827; margin: 0; }
+.table-header span { font-size: 12px; color: #9CA3AF; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { padding: 10px 14px; text-align: left; font-weight: 600; color: #6B7280; border-bottom: 1px solid #E5E7EB; white-space: nowrap; background: #F9FAFB; }
+td { padding: 12px 14px; border-bottom: 1px solid #F3F4F6; }
+.status-badge { display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+.btn-detail { background: none; border: 1px solid #E5E7EB; border-radius: 6px; padding: 3px 8px; font-size: 12px; color: #6B7280; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+.btn-detail svg { width: 12px; height: 12px; }
+.detail-row td { padding: 0 14px 14px; background: #FAFAFA; }
+.detail-content { padding: 12px 16px; background: #fff; border-radius: 10px; border: 1px solid #E5E7EB; margin-top: 4px; }
+.detail-content-title { font-size: 12px; font-weight: 600; color: #6B7280; margin-bottom: 10px; }
+.detail-reasons { display: flex; flex-wrap: wrap; gap: 8px; }
+.detail-reason-tag { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; border: 1px solid; }
+.detail-reason-tag svg { width: 14px; height: 14px; }
+.detail-reason-name { font-size: 13px; color: #374151; font-weight: 500; }
+.detail-reason-hours { font-size: 12px; font-weight: 700; }
+
+/* Analysis Display */
+.analysis-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+.analysis-item { padding: 12px 14px; background: #F9FAFB; border-radius: 10px; border: 1px solid #E5E7EB; }
+.analysis-item.warn { background: #FEF2F2; border-color: #FECACA; }
+.analysis-item.ok { background: #ECFDF5; border-color: #A7F3D0; }
+.analysis-item-label { font-size: 12px; color: #6B7280; margin-bottom: 4px; }
+.analysis-item-value { font-size: 18px; font-weight: 700; }
+.analysis-item-sub { font-size: 11px; color: #9CA3AF; margin-top: 2px; }
+.coverage-bar-wrap { margin-bottom: 16px; }
+.coverage-bar { height: 8px; background: #E5E7EB; border-radius: 4px; overflow: hidden; }
+.coverage-bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+.coverage-text { font-size: 13px; margin-top: 6px; }
+.btn-add-reasons { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 10px; border-radius: 10px; border: 1.5px dashed #D1D5DB; background: #fff; cursor: pointer; font-size: 14px; color: #6B7280; margin-top: 12px; transition: all 0.15s; }
+.btn-add-reasons:hover { border-color: #4F46E5; color: #4F46E5; }
+
+/* ==================== DingTalk H5 Mobile Adaptation ==================== */
+/* Safe area padding for iPhone notch */
+@supports (padding-top: env(safe-area-inset-top)) {
+  body { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+  .dashboard-header { padding-top: calc(16px + env(safe-area-inset-top)); }
+}
+
+/* Mobile responsive (< 768px) */
+@media screen and (max-width: 768px) {
+  .welcome-card { padding: 36px 24px; border-radius: 20px; }
+  .welcome-card h1 { font-size: 22px; }
+  .welcome-card p { font-size: 14px; }
+  .btn-primary { padding: 12px 28px; font-size: 15px; width: 100%; justify-content: center; }
+
+  .interview-container { max-width: 100%; padding: 0 4px; }
+  .question-card { padding: 20px 16px; border-radius: 16px; }
+  .question-label { font-size: 15px; }
+  .question-input { font-size: 16px; padding: 14px 16px; }
+  .chat-bubble { max-width: 90%; font-size: 14px; }
+  .nav-buttons { gap: 10px; }
+  .btn-nav { padding: 12px 16px; font-size: 14px; flex: 1; justify-content: center; }
+
+  .dashboard-header { padding: 12px 16px; flex-wrap: wrap; gap: 10px; }
+  .dashboard-header-title { font-size: 15px; }
+  .dashboard-header-actions { width: 100%; justify-content: flex-end; flex-wrap: wrap; }
+  .dashboard-content { padding: 16px; }
+
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .kpi-card { padding: 14px 12px; }
+  .kpi-value { font-size: 20px; }
+  .kpi-label { font-size: 12px; }
+
+  .chart-grid { grid-template-columns: 1fr; gap: 12px; }
+  .chart-card { padding: 16px; }
+  .chart-container { height: 220px; }
+
+  .table-card { border-radius: 12px; }
+  .table-header { padding: 12px 16px; flex-wrap: wrap; gap: 8px; }
+  table { font-size: 12px; }
+  th, td { padding: 8px 10px; }
+
+  .analysis-grid { grid-template-columns: 1fr; }
+  .reason-grid { gap: 8px; }
+  .reason-btn { padding: 10px 14px; font-size: 13px; }
+  .reason-field-input { padding: 12px 14px; font-size: 16px; }
+  .reason-detail-note { padding: 10px 12px; font-size: 15px; }
+
+  .time-filter-toggle { width: 100%; justify-content: center; }
+  .time-filter-btn { flex: 1; text-align: center; padding: 10px 12px; }
+  .date-picker-wrap { width: 100%; margin-left: 0; margin-top: 8px; }
+  .date-picker-input { flex: 1; }
+
+  .btn-submit { width: 100%; justify-content: center; padding: 14px 24px; }
+  .btn-add { width: 100%; justify-content: center; }
+}
+
+/* Settings Modal */
+.settings-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.settings-modal { background: #fff; border-radius: 20px; padding: 28px; max-width: 520px; width: 100%; max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
+.settings-modal h3 { font-size: 18px; font-weight: 700; color: #111827; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+.settings-section { margin-bottom: 20px; }
+.settings-section-title { font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+.settings-section-desc { font-size: 12px; color: #9CA3AF; margin-bottom: 10px; line-height: 1.6; }
+.settings-input { width: 100%; padding: 12px 14px; border-radius: 10px; border: 1.5px solid #E5E7EB; font-size: 14px; outline: none; background: #FAFAFA; transition: border-color 0.2s; box-sizing: border-box; }
+.settings-input:focus { border-color: #4F46E5; background: #fff; }
+.settings-btn-row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
+.settings-btn { padding: 10px 24px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; }
+.settings-btn-cancel { background: #F3F4F6; color: #6B7280; }
+.settings-btn-save { background: linear-gradient(135deg, #4F46E5, #7C3AED); color: #fff; box-shadow: 0 2px 8px rgba(79,70,229,0.3); }
+.settings-btn-test { background: linear-gradient(135deg, #059669, #10B981); color: #fff; box-shadow: 0 2px 8px rgba(5,150,105,0.3); }
+.settings-status { font-size: 12px; margin-top: 8px; padding: 8px 12px; border-radius: 8px; display: none; }
+.settings-status.success { display: block; background: #ECFDF5; color: #065F46; border: 1px solid #A7F3D0; }
+.settings-status.error { display: block; background: #FEF2F2; color: #991B1B; border: 1px solid #FECACA; }
+.settings-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+.settings-badge.on { background: #ECFDF5; color: #059669; }
+.settings-badge.off { background: #FEF2F2; color: #EF4444; }
+
+/* DingTalk environment indicator */
+.dingtalk-env-badge { display: none; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 8px; background: #EFF6FF; color: #2563EB; font-size: 11px; font-weight: 600; }
+.dingtalk-env-badge svg { width: 14px; height: 14px; }
+</style>
+</head>
+<body>
+
+<!-- Welcome Page -->
+<div id="welcome">
+  <div class="welcome-card">
+    <div class="welcome-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    </div>
+    <h1>班组产值与工时采访系统</h1>
+    <p>通过对话式采访，快速采集各班组的产值达成、工时偏差及异常原因，<br/>并实时生成数据看板。</p>
+    <div class="feature-tags">
+      <div class="feature-tag">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#4F46E5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        对话式采集
+      </div>
+      <div class="feature-tag">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        实时看板
+      </div>
+      <div class="feature-tag">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        异常追踪
+      </div>
+    </div>
+    <button class="btn-primary" data-action="startInterview">
+      <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      开始采访
+    </button>
+    <br/>
+    <button class="btn-link" data-action="showDashboard">查看现有数据看板 →</button>
+  </div>
+</div>
+
+<!-- Interview Page -->
+<div id="interview" class="hidden">
+  <div class="interview-container">
+    <div class="interview-header">
+      <div class="interview-header-left">
+        <div class="interview-header-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <div>
+          <div class="interview-header-title">采访进行中</div>
+          <div class="interview-header-sub" id="interview-sub">第 1 题 / 共 7 题</div>
+        </div>
+      </div>
+      <button class="btn-exit" data-action="showWelcome">退出</button>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill" id="progress-fill" style="width: 11%"></div>
+    </div>
+    <div class="chat-history" id="chat-history"></div>
+    <div class="question-card" id="question-card"></div>
+  </div>
+</div>
+
+<!-- Dashboard Page -->
+<div id="dashboard" class="hidden">
+  <div class="dashboard-header">
+    <div class="dashboard-header-left">
+      <div class="dashboard-header-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      </div>
+      <div>
+        <div class="dashboard-header-title">班组产值与工时看板</div>
+        <div class="dashboard-header-sub" id="dashboard-sub">共 3 个班组 · 实时数据</div>
+      </div>
+    </div>
+    <div class="dashboard-header-actions">
+      <div class="time-filter-toggle">
+        <button class="time-filter-btn" data-action="setTimeFilter" data-param="day">按日</button>
+        <button class="time-filter-btn" data-action="setTimeFilter" data-param="week">按周</button>
+        <button class="time-filter-btn" data-action="setTimeFilter" data-param="month">按月</button>
+      </div>
+      <div class="date-picker-wrap" id="date-picker-wrap"></div>
+      <button class="btn-add" data-action="startInterview">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        新增采访
+      </button>
+      <button data-action="showSettings" style="display:flex;align-items:center;gap:5px;padding:8px 14px;border-radius:10px;border:1.5px solid #F59E0B;background:#FFFBEB;font-size:13px;color:#D97706;font-weight:600;cursor:pointer;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        钉钉设置
+      </button>
+      <button data-action="showCloudData" style="display:flex;align-items:center;gap:5px;padding:8px 14px;border-radius:10px;border:1.5px solid #10B981;background:#ECFDF5;font-size:13px;color:#059669;font-weight:600;cursor:pointer;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+        云端数据
+      </button>
+      <span class="dingtalk-env-badge" id="dingtalk-env-badge">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15l-4-4 1.41-1.41L11 14.17l6.59-6.59L19 9l-8 8z"/></svg>
+        钉钉环境
+      </span>
+      <button class="btn-home" data-action="showWelcome">返回首页</button>
+    </div>
+    <div id="storage-warning" class="hidden" style="background:linear-gradient(135deg,#FEF2F2,#FFF7ED);border:2px solid #EF4444;border-radius:12px;padding:14px 20px;margin:0 24px 12px 24px;font-size:13px;color:#991B1B;display:none;line-height:1.7;box-shadow:0 2px 8px rgba(239,68,68,0.15);">
+      <div style="display:flex;align-items:flex-start;gap:12px;">
+        <div style="flex-shrink:0;width:36px;height:36px;border-radius:50%;background:#FEE2E2;display:flex;align-items:center;justify-content:center;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <div style="flex:1;">
+          <div style="font-weight:700;font-size:14px;margin-bottom:4px;">当前为预览模式，数据刷新后会丢失</div>
+          <div>请将文件下载到本地，用浏览器（Chrome/Edge）直接打开，数据即可自动保存。也可通过"备份数据"导出 JSON 文件，在其他浏览器中"恢复数据"。</div>
+          <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
+            <button data-action="downloadFile" style="display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border-radius:8px;border:none;background:linear-gradient(135deg,#DC2626,#EF4444);color:#fff;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 2px 6px rgba(220,38,38,0.3);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              下载文件到本地
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="dashboard-content" id="dashboard-content"></div>
+</div>
+
+<script>
+// ==================== EVENT DELEGATION ====================
+document.addEventListener('DOMContentLoaded', function() {
+  document.addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    var action = btn.getAttribute('data-action');
+    if (btn.disabled || btn.hasAttribute('disabled')) return;
+    switch(action) {
+      case 'startInterview': startInterview(); break;
+      case 'showDashboard': showDashboard(); break;
+      case 'showWelcome': showWelcome(); break;
+      case 'goPrev': goPrev(); break;
+      case 'goNext': goNext(); break;
+      case 'addMoreReasons': addMoreReasons(); break;
+      case 'showAddReasonPicker': showAddReasonPicker(); break;
+      case 'toggleReason': toggleReason(btn.getAttribute('data-reason-name')); break;
+      case 'pickNewReason': pickNewReason(btn.getAttribute('data-reason-name')); break;
+      case 'submitInterview': submitInterview(); break;
+      case 'toggleDetail': toggleDetail(Number(btn.getAttribute('data-param'))); break;
+      case 'setTimeFilter': setTimeFilter(btn.getAttribute('data-param')); break;
+      case 'exportData': exportData(); break;
+      case 'downloadFile': downloadFile(); break;
+      case 'backupData': backupData(); break;
+      case 'restoreData': restoreData(); break;
+      case 'showSettings': showSettings(); break;
+      case 'closeSettings': closeSettings(); break;
+      case 'saveWebhookSettings': saveWebhookSettings(); break;
+      case 'testWebhook': testWebhook(); break;
+      case 'showCloudData': showCloudData(); break;
+      case 'closeCloudData': closeCloudData(); break;
+      case 'exportCloudCSV': exportCloudCSV(); break;
+      case 'showAdminLogin': showAdminLogin(); break;
+      case 'adminLogin': adminLogin(); break;
+      case 'cancelAdmin': closeCloudData(); break;
+      case 'clearAllCloudData': clearAllCloudData(); break;
+      case 'deleteCloudRecord': deleteCloudRecord(btn.getAttribute('data-param')); break;
+      case 'backToCloudData': showCloudData(); break;
+    }
+  });
+});
+
+// ==================== DATA ====================
+const TEAM_OPTIONS = ["一部一课","一部二课","一部三课","二部一课","二部二课","二部三课","二部四课","二部五课","三部一课"];
+
+const INITIAL_DATA = [
+  { id:1, teamName:"一部一课", leader:"张伟", date:"2026-07-23", targetValue:5.2, actualValue:4.98, standardHours:160, actualHours:172, abnormalReasons:[{reason:"设备原因",hours:24,note:"1号线停机2小时，影响12人",data:{downtimeHours:2,affectedPeople:12}},{reason:"模具原因",hours:8,note:"3号线换模1小时，影响8人",data:{downtimeHours:1,affectedPeople:8}}] },
+  { id:2, teamName:"二部一课", leader:"李娜", date:"2026-07-23", targetValue:4.8, actualValue:4.72, standardHours:160, actualHours:164, abnormalReasons:[{reason:"品质返工",hours:16,note:"A203型号返工，4人×4小时",data:{productModel:"A203",affectedPeople:4,hoursPerPerson:4}}] },
+  { id:3, teamName:"三部一课", leader:"王磊", date:"2026-07-23", targetValue:5.5, actualValue:5.58, standardHours:160, actualHours:158, abnormalReasons:[] },
+];
+
+const REASON_CATEGORIES = [
+  {
+    name: "停机类",
+    label: "原因分类一：停机类",
+    desc: "停机时数 × 影响人数 = 合计影响工时",
+    options: ["设备原因","模具原因","工艺原因"],
+    fields: ["downtimeHours","affectedPeople"],
+    fieldLabels: { downtimeHours:"停机时数（小时）", affectedPeople:"影响人数（人）" },
+    notePlaceholders: {
+      "设备原因": "请说明是哪个产线哪台设备异常，影响的是哪个产品",
+      "模具原因": "请说明是哪个产线哪台模具异常，影响的是哪个产品",
+      "工艺原因": "请说明是哪个产线哪项工艺异常，影响的是哪个产品"
+    },
+    calcHours: function(d) { return Number(d.downtimeHours||0) * Number(d.affectedPeople||0); }
+  },
+  {
+    name: "产品类",
+    label: "原因分类二：产品类",
+    desc: "每人消耗工时 × 影响人数 = 合计影响工时",
+    options: ["品质返工","新品调试"],
+    fields: ["productModel","affectedPeople","hoursPerPerson"],
+    fieldLabels: { productModel:"对应产品型号", affectedPeople:"影响人数（人）", hoursPerPerson:"每人消耗工时（小时）" },
+    notePlaceholders: {
+      "品质返工": "具体的品质问题是什么，有计划返工还是临时返工，返工工时是否超过预计，这个品质问题后续对策是什么",
+      "新品调试": "是临时的还是有计划的，实际工时与预计工时对比，新品试做有哪些问题"
+    },
+    calcHours: function(d) { return Number(d.hoursPerPerson||0) * Number(d.affectedPeople||0); }
+  },
+  {
+    name: "其他类",
+    label: "原因分类三：其他原因",
+    desc: "影响工时 × 影响人数 = 合计影响工时",
+    options: ["其他原因"],
+    fields: ["impactHours","affectedPeople"],
+    fieldLabels: { impactHours:"影响工时（小时）", affectedPeople:"影响人数（人）" },
+    notePlaceholders: {
+      "其他原因": "请说明具体原因及影响范围"
+    },
+    calcHours: function(d) { return Number(d.impactHours||0) * Number(d.affectedPeople||0); }
+  }
+];
+
+const REASON_COLORS = {
+  "设备原因":"#EF4444","模具原因":"#F59E0B","工艺原因":"#8B5CF6",
+  "品质返工":"#06B6D4","新品调试":"#10B981","其他原因":"#6B7280",
+};
+
+const QUESTIONS = [
+  { id:"teamName", label:"请选择班组", placeholder:"请选择班组", inputType:"select" },
+  { id:"date", label:"这是哪一天的生产数据？", placeholder:"例如：2026-07-23", inputType:"date" },
+  { id:"targetValue", label:"当日计划产量是多少万元？", placeholder:"例如：5.2", inputType:"number" },
+  { id:"actualValue", label:"当日实际产量是多少万元？", placeholder:"例如：4.98", inputType:"number" },
+  { id:"standardHours", label:"当日计划工时是多少小时？", placeholder:"例如：160", inputType:"number" },
+  { id:"actualHours", label:"当日实际工时是多少小时？", placeholder:"例如：172", inputType:"number" },
+  { id:"effectiveHours", label:"当日有效工时是多少小时？", placeholder:"例如：140", inputType:"number" },
+  { id:"attendanceHours", label:"当日出勤工时是多少小时？", placeholder:"例如：200", inputType:"number" },
+];
+
+// Get visible questions based on current mode
+function getVisibleQuestions() {
+  var isDLE = answers.teamName && (answers.teamName === "二部一课" || answers.teamName === "二部二课");
+  if (isDLE) {
+    // DLE mode: only teamName, date, effectiveHours, actualHours
+    return QUESTIONS.filter(function(q) {
+      return q.id !== "targetValue" && q.id !== "actualValue" && q.id !== "standardHours" && q.id !== "attendanceHours";
+    });
+  } else {
+    // Normal mode: skip effectiveHours/attendanceHours
+    return QUESTIONS.filter(function(q) {
+      return q.id !== "effectiveHours" && q.id !== "attendanceHours";
+    });
+  }
+}
+
+// ==================== STATE ====================
+let STORAGE_KEY = "team_interview_records";
+let records;
+let storageAvailable = false;
+let isPreviewMode = false; // true when running inside an iframe (preview environment)
+(function initRecords() {
+  // Detect if running in an iframe / preview environment
+  try {
+    isPreviewMode = (window.self !== window.top);
+  } catch(e) {
+    isPreviewMode = true;
+  }
+  // Check if localStorage is available
+  try {
+    var testKey = "__storage_test__";
+    localStorage.setItem(testKey, "1");
+    localStorage.removeItem(testKey);
+    storageAvailable = true;
+  } catch(e) {
+    storageAvailable = false;
+  }
+  try {
+    if (storageAvailable) {
+      var saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        records = JSON.parse(saved);
+      } else {
+        records = [...INITIAL_DATA];
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+      }
+    } else {
+      records = [...INITIAL_DATA];
+    }
+  } catch(e) {
+    records = [...INITIAL_DATA];
+  }
+})();
+function saveRecords() {
+  if (!storageAvailable) return;
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(records)); } catch(e) {}
+}
+let currentStep = 0;
+let answers = {};
+let showDetailId = null;
+let currentQid = ""; // global: current question ID for input handler
+let isAddingMore = false; // global: whether user is in "add more reasons" mode
+let selectedReasons = new Set(); // global: tracks multi-selected reasons on selection page
+let dashboardTimeFilter = "day"; // "day" | "week" | "month"
+let dashboardDateFilter = (function(){ var d=new Date(); d.setDate(d.getDate()-1); return d.toISOString().split("T")[0]; })(); // default to yesterday
+let reasonIdCounter = 0;
+function genReasonId() { return Date.now() + (++reasonIdCounter); }
+function findCategory(reasonName) {
+  var cat = null;
+  REASON_CATEGORIES.forEach(function(c) { if (c.options.indexOf(reasonName) >= 0) cat = c; });
+  return cat;
+}
+
+// ==================== DINGTALK JSAPI ====================
+var isDingTalkEnv = false;
+var dingtalkUser = null;
+
+(function initDingTalk() {
+  // Detect DingTalk environment via User-Agent
+  var ua = navigator.userAgent.toLowerCase();
+  isDingTalkEnv = ua.indexOf('dingtalk') >= 0;
+
+  if (isDingTalkEnv && typeof dd !== 'undefined' && dd.ready) {
+    // DingTalk JSAPI initialization
+    dd.ready(function() {
+      // Hide DingTalk native navigation bar for immersive experience
+      try {
+        dd.biz.navigation.setTitle({ title: '班组产值采访系统' });
+        dd.biz.navigation.setRight({ show: false });
+      } catch(e) {}
+
+      // Try to get current user info for auto-filling team name
+      try {
+        dd.runtime.permission.requestAuthCode({
+          clientId: '',  // Leave empty - works in H5 micro-app context
+          onSuccess: function(result) {
+            // result.code contains the auth code
+            // In a real H5 micro-app, you'd exchange this for user info via server API
+            dingtalkUser = { authCode: result.code };
+          },
+          onFail: function(err) {
+            // Silently fail - user info is optional
+          }
+        });
+      } catch(e) {}
+    });
+
+    dd.error(function(err) {
+      // JSAPI error - silently ignore, app still works without DingTalk features
+    });
+  }
+
+  // Show DingTalk badge if in DingTalk environment
+  if (isDingTalkEnv) {
+    setTimeout(function() {
+      var badge = document.getElementById('dingtalk-env-badge');
+      if (badge) badge.style.display = 'inline-flex';
+    }, 100);
+  }
+})();
+
+// ==================== WEBHOOK CONFIGURATION ====================
+var WEBHOOK_STORAGE_KEY = "team_interview_webhook";
+
+function getWebhookConfig() {
+  try {
+    var saved = localStorage.getItem(WEBHOOK_STORAGE_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch(e) {}
+  return { url: "", enabled: false, secret: "" };
+}
+
+function setWebhookConfig(config) {
+  try {
+    localStorage.setItem(WEBHOOK_STORAGE_KEY, JSON.stringify(config));
+  } catch(e) {}
+}
+
+// ==================== JSONBin.io CLOUD STORAGE ====================
+var JSONBIN_API_KEY = "$2a$10$kGOwsMptKbVPCmtGDvNK8OEzXj.SmYHX.HPy5hLdpIN8yYjKRpYmS";
+var JSONBIN_BIN_ID = "6a631bd7f5f4af5e29ba44f4";
+var JSONBIN_BASE_URL = "https://api.jsonbin.io/v3/b/" + JSONBIN_BIN_ID;
+var ADMIN_PASSWORD = "minth2026";
+
+function uploadRecordToCloud(record) {
+  if (!JSONBIN_API_KEY || !JSONBIN_BIN_ID) return;
+  // Read existing records, append new one, write back
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', JSONBIN_BASE_URL + '/latest', true);
+  xhr.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
+  xhr.timeout = 8000;
+  xhr.onload = function() {
+    if (xhr.status >= 200 && xhr.status < 300) {
+      try {
+        var resp = JSON.parse(xhr.responseText);
+        var data = resp.record || {};
+        var records = data.records || [];
+        records.push(record);
+        // Write back
+        var xhr2 = new XMLHttpRequest();
+        xhr2.open('PUT', JSONBIN_BASE_URL, true);
+        xhr2.setRequestHeader('Content-Type', 'application/json');
+        xhr2.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
+        xhr2.timeout = 8000;
+        xhr2.onload = function() {
+          // Upload complete (success or fail, silently handled)
+        };
+        xhr2.onerror = function() {};
+        xhr2.ontimeout = function() {};
+        xhr2.send(JSON.stringify({ records: records }));
+      } catch(e) {}
+    }
+  };
+  xhr.onerror = function() {};
+  xhr.ontimeout = function() {};
+  xhr.send();
+}
+
+// ==================== SETTINGS MODAL ====================
+function showSettings() {
+  // Remove existing settings modal if any
+  var existing = document.getElementById("settings-overlay");
+  if (existing) existing.remove();
+
+  var config = getWebhookConfig();
+  var overlay = document.createElement("div");
+  overlay.id = "settings-overlay";
+  overlay.className = "settings-overlay";
+  overlay.onclick = function(e) { if (e.target === overlay) closeSettings(); };
+
+  var html = '<div class="settings-modal">';
+  html += '<h3><svg viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> 钉钉通知设置</h3>';
+
+  // Section 1: Environment info
+  html += '<div class="settings-section">';
+  html += '<div class="settings-section-title">运行环境</div>';
+  html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
+  html += '<span class="settings-badge ' + (isDingTalkEnv ? 'on' : 'off') + '">' + (isDingTalkEnv ? '钉钉环境' : '非钉钉环境') + '</span>';
+  if (isDingTalkEnv) {
+    html += '<span style="font-size:12px;color:#059669">已检测到钉钉客户端，JSAPI 已就绪</span>';
+  } else {
+    html += '<span style="font-size:12px;color:#9CA3AF">在钉钉中打开可自动适配移动端</span>';
+  }
+  html += '</div></div>';
+
+  // Section 2: Webhook configuration
+  html += '<div class="settings-section">';
+  html += '<div class="settings-section-title">';
+  html += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer">';
+  html += '<input type="checkbox" id="webhook-enabled" ' + (config.enabled ? 'checked' : '') + ' style="width:16px;height:16px;accent-color:#059669" />';
+  html += '启用钉钉群机器人通知';
+  html += '</label>';
+  html += '<span class="settings-badge ' + (config.enabled ? 'on' : 'off') + '" id="webhook-status-badge">' + (config.enabled ? '已启用' : '未启用') + '</span>';
+  html += '</div>';
+  html += '<div class="settings-section-desc">提交采访数据后，自动将数据摘要发送到钉钉群。需要在钉钉群中添加"自定义机器人"并获取 Webhook 地址。</div>';
+
+  html += '<div style="margin-bottom:12px">';
+  html += '<label style="font-size:13px;color:#6B7280;display:block;margin-bottom:4px">Webhook 地址</label>';
+  html += '<input class="settings-input" id="webhook-url" type="text" placeholder="https://oapi.dingtalk.com/robot/send?access_token=xxxxx" value="' + (config.url || '').replace(/"/g, '&quot;') + '" />';
+  html += '</div>';
+
+  html += '<div>';
+  html += '<label style="font-size:13px;color:#6B7280;display:block;margin-bottom:4px">加签密钥（可选）</label>';
+  html += '<input class="settings-input" id="webhook-secret" type="text" placeholder="SECxxxxx（如机器人设置了加签，请填写）" value="' + (config.secret || '').replace(/"/g, '&quot;') + '" />';
+  html += '</div>';
+
+  html += '<div id="webhook-test-status" class="settings-status"></div>';
+  html += '</div>';
+
+  // Section 3: How to set up
+  html += '<div class="settings-section">';
+  html += '<div class="settings-section-title">如何获取 Webhook 地址？</div>';
+  html += '<div class="settings-section-desc" style="line-height:1.8">';
+  html += '1. 打开钉钉群 → 群设置 → 智能群助手 → 添加机器人<br/>';
+  html += '2. 选择"自定义（通过Webhook接入）"<br/>';
+  html += '3. 设置机器人名称（如"产值采访通知"），安全设置建议选"加签"<br/>';
+  html += '4. 复制 Webhook 地址粘贴到上方输入框<br/>';
+  html += '5. 如果选择了"加签"，把 SEC 开头的密钥也填上';
+  html += '</div></div>';
+
+  // Buttons
+  html += '<div class="settings-btn-row">';
+  html += '<button class="settings-btn settings-btn-test" data-action="testWebhook">发送测试</button>';
+  html += '<button class="settings-btn settings-btn-cancel" data-action="closeSettings">取消</button>';
+  html += '<button class="settings-btn settings-btn-save" data-action="saveWebhookSettings">保存设置</button>';
+  html += '</div>';
+
+  html += '</div>';
+  overlay.innerHTML = html;
+  document.body.appendChild(overlay);
+
+  // Toggle webhook status badge when checkbox changes
+  var checkbox = document.getElementById('webhook-enabled');
+  if (checkbox) {
+    checkbox.addEventListener('change', function() {
+      var badge = document.getElementById('webhook-status-badge');
+      if (badge) {
+        badge.className = 'settings-badge ' + (this.checked ? 'on' : 'off');
+        badge.textContent = this.checked ? '已启用' : '未启用';
+      }
+    });
+  }
+}
+
+function closeSettings() {
+  var overlay = document.getElementById("settings-overlay");
+  if (overlay) overlay.remove();
+}
+
+function saveWebhookSettings() {
+  var url = (document.getElementById('webhook-url').value || '').trim();
+  var secret = (document.getElementById('webhook-secret').value || '').trim();
+  var enabled = document.getElementById('webhook-enabled').checked;
+
+  if (enabled && !url) {
+    alert('请先填写 Webhook 地址，或取消勾选"启用通知"');
+    return;
+  }
+
+  setWebhookConfig({ url: url, enabled: enabled, secret: secret });
+  closeSettings();
+  alert('钉钉通知设置已保存' + (enabled ? '，提交数据后将自动通知钉钉群' : ''));
+}
+
+function testWebhook() {
+  var url = (document.getElementById('webhook-url').value || '').trim();
+  var secret = (document.getElementById('webhook-secret').value || '').trim();
+  var statusEl = document.getElementById('webhook-test-status');
+
+  if (!url) {
+    statusEl.className = 'settings-status error';
+    statusEl.textContent = '请先填写 Webhook 地址';
+    return;
+  }
+
+  statusEl.className = 'settings-status success';
+  statusEl.textContent = '正在发送测试消息...';
+
+  var testMsg = {
+    msgtype: "markdown",
+    markdown: {
+      title: "测试通知 - 班组产值采访系统",
+      text: "### 测试通知\n\n**班组产值采访系统** 钉钉通知测试成功！\n\n> 如果你看到这条消息，说明 Webhook 配置正确。\n\n" + new Date().toLocaleString('zh-CN')
+    }
+  };
+
+  sendWebhookRequest(url, secret, testMsg, function(ok, resp) {
+    if (ok) {
+      statusEl.className = 'settings-status success';
+      statusEl.textContent = '测试消息发送成功！';
+    } else {
+      statusEl.className = 'settings-status error';
+      statusEl.textContent = '发送失败：' + (resp || '请检查 Webhook 地址是否正确');
+    }
+  });
+}
+
+// ==================== DINGTALK WEBHOOK NOTIFICATION ====================
+function sendWebhookRequest(url, secret, payload, callback) {
+  // If secret is provided, compute HMAC-SHA256 signature
+  var finalUrl = url;
+  if (secret && secret.indexOf('SEC') === 0) {
+    var timestamp = Date.now();
+    var stringToSign = timestamp + '\n' + secret;
+    // Use SubtleCrypto for HMAC-SHA256 (async)
+    computeHmacSha256(stringToSign, secret).then(function(sign) {
+      var signEnc = encodeURIComponent(sign);
+      finalUrl = url + '&timestamp=' + timestamp + '&sign=' + signEnc;
+      doWebhookPost(finalUrl, payload, callback);
+    }).catch(function(e) {
+      // Fallback: try without signature
+      doWebhookPost(url, payload, callback);
+    });
+  } else {
+    doWebhookPost(finalUrl, payload, callback);
+  }
+}
+
+function computeHmacSha256(message, secret) {
+  // Use Web Crypto API (available in modern browsers)
+  var enc = new TextEncoder();
+  return crypto.subtle.importKey(
+    'raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  ).then(function(key) {
+    return crypto.subtle.sign('HMAC', key, enc.encode(message));
+  }).then(function(sig) {
+    return btoa(String.fromCharCode.apply(null, new Uint8Array(sig)));
+  });
+}
+
+function doWebhookPost(url, payload, callback) {
+  var body = JSON.stringify(payload);
+  // In DingTalk environment, use JSAPI to bypass CORS
+  if (isDingTalkEnv && typeof dd !== 'undefined' && dd.httpRequest) {
+    dd.httpRequest({
+      url: url,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      data: body,
+      contentType: 'application/json',
+      dataType: 'json',
+      success: function(res) {
+        if (res && res.data) {
+          var resp = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
+          if (resp.errcode === 0) {
+            callback(true, resp);
+          } else {
+            callback(false, resp.errmsg || 'errcode: ' + resp.errcode);
+          }
+        } else {
+          callback(true, null);
+        }
+      },
+      fail: function(err) {
+        callback(false, err && err.errorMessage ? err.errorMessage : 'JSAPI请求失败');
+      }
+    });
+  } else {
+    // Fallback: XHR (only works from same-origin server or with CORS proxy)
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', url, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.timeout = 10000;
+    xhr.onload = function() {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          var resp = JSON.parse(xhr.responseText);
+          if (resp.errcode === 0) {
+            callback(true, resp);
+          } else {
+            callback(false, resp.errmsg || 'errcode: ' + resp.errcode);
+          }
+        } catch(e) {
+          callback(true, null);
+        }
+      } else {
+        callback(false, 'HTTP ' + xhr.status);
+      }
+    };
+    xhr.onerror = function() { callback(false, '网络错误（非钉钉环境无法跨域，请部署为钉钉H5微应用）'); };
+    xhr.ontimeout = function() { callback(false, '请求超时'); };
+    xhr.send(body);
+  }
+}
+
+function sendDingTalkNotification(record) {
+  var config = getWebhookConfig();
+  if (!config.enabled || !config.url) return;
+
+  var compRate = pctNum(record.actualValue, record.targetValue);
+  var statusText = getCompletionLabel(compRate);
+  var statusEmoji = compRate >= 100 ? '&#x2705;' : compRate >= 90 ? '&#x1F7E1;' : '&#x274C;';
+
+  // Build markdown message
+  var text = '### ' + statusEmoji + ' ' + record.teamName + ' 产值日报\n\n';
+  text += '**日期：** ' + record.date + '\n\n';
+  text += '| 指标 | 数值 |\n|:---|:---|\n';
+  text += '| 目标产值 | ' + fmtW(record.targetValue) + ' |\n';
+  text += '| 实际产值 | ' + fmtW(record.actualValue) + ' |\n';
+  text += '| 达成率 | **' + compRate.toFixed(1) + '%** |\n';
+  text += '| 计划工时 | ' + record.standardHours + 'h |\n';
+  text += '| 实际工时 | ' + record.actualHours + 'h |\n';
+
+  if (record.plannedPH != null) {
+    text += '| 计划人时产值 | ' + fmtPH(record.plannedPH) + ' 元/h |\n';
+    text += '| 实际人时产值 | ' + fmtPH(record.actualPH) + ' 元/h |\n';
+  }
+
+  text += '\n**状态：** ' + statusText + '\n';
+
+  // Add abnormal reasons if any
+  if (record.abnormalReasons && record.abnormalReasons.length > 0) {
+    var totalLoss = record.abnormalReasons.reduce(function(s, a) { return s + a.hours; }, 0);
+    text += '\n**异常原因（合计 ' + totalLoss.toFixed(1) + 'h）：**\n\n';
+    record.abnormalReasons.forEach(function(a) {
+      text += '- **' + a.reason + '** ' + a.hours.toFixed(1) + 'h';
+      if (a.note) text += '：' + a.note;
+      text += '\n';
+    });
+    if (record.coverage != null) {
+      text += '\n差距覆盖率：' + record.coverage.toFixed(0) + '%';
+    }
+  } else {
+    text += '\n无异常，生产正常。';
+  }
+
+  var payload = {
+    msgtype: "markdown",
+    markdown: {
+      title: record.teamName + ' 产值日报 ' + compRate.toFixed(1) + '%',
+      text: text
+    }
+  };
+
+  // Send asynchronously - don't block UI
+  sendWebhookRequest(config.url, config.secret, payload, function(ok, resp) {
+    if (ok) {
+      console.log('[DingTalk] 通知发送成功');
+    } else {
+      console.warn('[DingTalk] 通知发送失败:', resp);
+    }
+  });
+}
+
+// ==================== CLOUD DATA VIEWER ====================
+var cloudRecordsCache = [];
+function showCloudData() {
+  var existing = document.getElementById("cloud-overlay");
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'cloud-overlay';
+  overlay.className = 'settings-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  overlay.onclick = function(e) { if (e.target === overlay) closeCloudData(); };
+
+  var modal = document.createElement('div');
+  modal.className = 'settings-modal';
+  modal.style.cssText = 'background:#fff;border-radius:16px;width:90%;max-width:700px;max-height:80vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3);';
+  // Don't use stopPropagation() here - it blocks event delegation on document
+
+  modal.innerHTML = '<div style="padding:20px 24px 16px;border-bottom:1px solid #E5E7EB;display:flex;align-items:center;justify-content:space-between;">' +
+    '<div style="display:flex;align-items:center;gap:10px;">' +
+    '<svg viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" style="width:22px;height:22px"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>' +
+    '<span style="font-size:17px;font-weight:700;color:#111827;">云端数据汇总</span>' +
+    '</div>' +
+    '<button data-action="closeCloudData" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9CA3AF;padding:4px 8px;border-radius:6px;">&times;</button>' +
+    '</div>' +
+    '<div id="cloud-data-content" style="padding:20px 24px;overflow-y:auto;flex:1;font-size:13px;color:#6B7280;">正在加载云端数据...</div>';
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  // Fetch data from JSONBin.io
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', JSONBIN_BASE_URL + '/latest', true);
+  xhr.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
+  xhr.timeout = 10000;
+  xhr.onload = function() {
+    var content = document.getElementById('cloud-data-content');
+    if (!content) return;
+    if (xhr.status >= 200 && xhr.status < 300) {
+      try {
+        var resp = JSON.parse(xhr.responseText);
+        var data = resp.record || {};
+        var cloudRecords = data.records || [];
+        if (cloudRecords.length === 0) {
+          content.innerHTML = '<div style="text-align:center;padding:40px 0;color:#9CA3AF;">暂无云端数据</div>';
+          return;
+        }
+        // Sort by date descending
+        cloudRecords.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
+        cloudRecordsCache = cloudRecords;
+        var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">' +
+          '<span style="color:#374151;font-weight:600;">共 ' + cloudRecords.length + ' 条记录</span>' +
+          '<div style="display:flex;gap:8px;">' +
+          '<button data-action="exportCloudCSV" style="display:flex;align-items:center;gap:4px;padding:6px 12px;border-radius:8px;border:1.5px solid #059669;background:#ECFDF5;font-size:12px;color:#059669;font-weight:600;cursor:pointer;">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>' +
+          '导出CSV</button>' +
+          '<button data-action="showAdminLogin" style="display:flex;align-items:center;gap:4px;padding:6px 12px;border-radius:8px;border:1.5px solid #DC2626;background:#FEF2F2;font-size:12px;color:#DC2626;font-weight:600;cursor:pointer;">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' +
+          '管理</button></div></div>';
+        html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+        html += '<thead><tr style="background:#F3F4F6;">';
+        html += '<th style="padding:8px 10px;text-align:left;border-bottom:2px solid #E5E7EB;">日期</th>';
+        html += '<th style="padding:8px 10px;text-align:left;border-bottom:2px solid #E5E7EB;">班组</th>';
+        html += '<th style="padding:8px 10px;text-align:right;border-bottom:2px solid #E5E7EB;">目标产值</th>';
+        html += '<th style="padding:8px 10px;text-align:right;border-bottom:2px solid #E5E7EB;">实际产值</th>';
+        html += '<th style="padding:8px 10px;text-align:right;border-bottom:2px solid #E5E7EB;">达成率</th>';
+        html += '<th style="padding:8px 10px;text-align:right;border-bottom:2px solid #E5E7EB;">计划工时</th>';
+        html += '<th style="padding:8px 10px;text-align:right;border-bottom:2px solid #E5E7EB;">实际工时</th>';
+        html += '<th style="padding:8px 10px;text-align:right;border-bottom:2px solid #E5E7EB;">人时产值</th>';
+        html += '</tr></thead><tbody>';
+        cloudRecords.forEach(function(r) {
+          var compRate = r.targetValue > 0 ? (r.actualValue / r.targetValue * 100) : 0;
+          var rateColor = compRate >= 100 ? '#059669' : compRate >= 90 ? '#D97706' : '#DC2626';
+          html += '<tr style="border-bottom:1px solid #F3F4F6;">';
+          html += '<td style="padding:8px 10px;">' + (r.date || '-') + '</td>';
+          html += '<td style="padding:8px 10px;font-weight:600;">' + (r.teamName || '-') + '</td>';
+          html += '<td style="padding:8px 10px;text-align:right;">' + fmtW(r.targetValue) + '</td>';
+          html += '<td style="padding:8px 10px;text-align:right;">' + fmtW(r.actualValue) + '</td>';
+          html += '<td style="padding:8px 10px;text-align:right;color:' + rateColor + ';font-weight:600;">' + compRate.toFixed(1) + '%</td>';
+          html += '<td style="padding:8px 10px;text-align:right;">' + (r.standardHours || '-') + 'h</td>';
+          html += '<td style="padding:8px 10px;text-align:right;">' + (r.actualHours || '-') + 'h</td>';
+          html += '<td style="padding:8px 10px;text-align:right;">' + (r.actualPH ? fmtPH(r.actualPH) : '-') + '</td>';
+          html += '</tr>';
+        });
+        html += '</tbody></table></div>';
+        content.innerHTML = html;
+      } catch(e) {
+        content.innerHTML = '<div style="color:#DC2626;">数据解析失败</div>';
+      }
+    } else {
+      content.innerHTML = '<div style="color:#DC2626;">加载失败 (HTTP ' + xhr.status + ')</div>';
+    }
+  };
+  xhr.onerror = function() {
+    var content = document.getElementById('cloud-data-content');
+    if (content) content.innerHTML = '<div style="color:#DC2626;">网络错误，请检查网络连接</div>';
+  };
+  xhr.ontimeout = function() {
+    var content = document.getElementById('cloud-data-content');
+    if (content) content.innerHTML = '<div style="color:#DC2626;">请求超时</div>';
+  };
+  xhr.send();
+}
+
+function closeCloudData() {
+  var overlay = document.getElementById("cloud-overlay");
+  if (overlay) overlay.remove();
+}
+
+// ==================== ADMIN FUNCTIONS ====================
+var adminLoggedIn = false;
+
+function showAdminLogin() {
+  if (adminLoggedIn) {
+    showAdminPanel();
+    return;
+  }
+  var content = document.getElementById('cloud-data-content');
+  if (!content) return;
+  content.innerHTML = '<div style="padding:30px 0;text-align:center;">' +
+    '<svg viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2" style="width:40px;height:40px;margin-bottom:16px"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' +
+    '<div style="font-size:15px;font-weight:600;color:#111827;margin-bottom:6px;">管理员验证</div>' +
+    '<div style="font-size:12px;color:#6B7280;margin-bottom:20px;">请输入管理员密码以继续操作</div>' +
+    '<input id="admin-pwd-input" type="password" placeholder="请输入密码" style="width:220px;padding:10px 14px;border:1.5px solid #D1D5DB;border-radius:10px;font-size:14px;text-align:center;outline:none;" />' +
+    '<div id="admin-pwd-error" style="color:#DC2626;font-size:12px;margin-top:8px;min-height:18px;"></div>' +
+    '<div style="display:flex;gap:10px;justify-content:center;margin-top:16px;">' +
+    '<button data-action="adminLogin" style="padding:10px 28px;border-radius:10px;border:none;background:#DC2626;color:#fff;font-size:13px;font-weight:600;cursor:pointer;">确认</button>' +
+    '<button data-action="backToCloudData" style="padding:10px 28px;border-radius:10px;border:1.5px solid #D1D5DB;background:#fff;color:#374151;font-size:13px;font-weight:600;cursor:pointer;">返回</button>' +
+    '</div></div>';
+  setTimeout(function() {
+    var inp = document.getElementById('admin-pwd-input');
+    if (inp) {
+      inp.focus();
+      inp.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') adminLogin();
+      });
+    }
+  }, 100);
+}
+
+function adminLogin() {
+  var inp = document.getElementById('admin-pwd-input');
+  var errEl = document.getElementById('admin-pwd-error');
+  if (!inp) return;
+  if (inp.value === ADMIN_PASSWORD) {
+    adminLoggedIn = true;
+    showAdminPanel();
+  } else {
+    if (errEl) errEl.textContent = '密码错误，请重试';
+    inp.value = '';
+    inp.focus();
+  }
+}
+
+function showAdminPanel() {
+  var content = document.getElementById('cloud-data-content');
+  if (!content) return;
+  var html = '<div style="padding:20px 0;">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;">' +
+    '<svg viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" style="width:20px;height:20px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>' +
+    '<span style="font-size:14px;font-weight:600;color:#059669;">管理员模式</span>' +
+    '</div>';
+  html += '<div style="display:flex;flex-direction:column;gap:12px;">';
+  // Clear all data button
+  html += '<div style="padding:16px;border:1.5px solid #FCA5A5;border-radius:12px;background:#FEF2F2;">' +
+    '<div style="font-size:14px;font-weight:600;color:#991B1B;margin-bottom:4px;">清空全部数据</div>' +
+    '<div style="font-size:12px;color:#6B7280;margin-bottom:12px;">删除云端所有 ' + cloudRecordsCache.length + ' 条记录，此操作不可恢复</div>' +
+    '<button data-action="clearAllCloudData" style="padding:8px 20px;border-radius:8px;border:none;background:#DC2626;color:#fff;font-size:12px;font-weight:600;cursor:pointer;">清空全部数据</button>' +
+    '</div>';
+  // Delete individual records
+  html += '<div style="padding:16px;border:1.5px solid #E5E7EB;border-radius:12px;background:#F9FAFB;">' +
+    '<div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:4px;">删除单条记录</div>' +
+    '<div style="font-size:12px;color:#6B7280;margin-bottom:12px;">点击记录右侧"删除"按钮移除特定数据</div>';
+  if (cloudRecordsCache.length === 0) {
+    html += '<div style="color:#9CA3AF;font-size:12px;">暂无数据</div>';
+  } else {
+    html += '<div style="max-height:300px;overflow-y:auto;">';
+    cloudRecordsCache.forEach(function(r, i) {
+      var compRate = r.targetValue > 0 ? (r.actualValue / r.targetValue * 100).toFixed(1) : '0.0';
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid #F3F4F6;font-size:12px;">' +
+        '<div><span style="font-weight:600;">' + (r.teamName || '-') + '</span> ' +
+        '<span style="color:#6B7280;">' + (r.date || '-') + '</span> ' +
+        '<span style="color:#6B7280;">产值:' + (r.actualValue || 0) + ' 达成' + compRate + '%</span></div>' +
+        '<button data-action="deleteCloudRecord" data-param="' + i + '" style="padding:4px 12px;border-radius:6px;border:1px solid #DC2626;background:#fff;color:#DC2626;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;">删除</button>' +
+        '</div>';
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+  // Back button
+  html += '<div style="text-align:center;margin-top:8px;">' +
+    '<button data-action="backToCloudData" style="padding:8px 24px;border-radius:8px;border:1.5px solid #D1D5DB;background:#fff;color:#374151;font-size:12px;font-weight:600;cursor:pointer;">返回数据列表</button>' +
+    '</div>';
+  html += '</div></div>';
+  content.innerHTML = html;
+}
+
+function clearAllCloudData() {
+  if (!confirm('确定要清空全部 ' + cloudRecordsCache.length + ' 条云端数据吗？\n此操作不可恢复！')) return;
+  if (!confirm('再次确认：清空后数据无法找回，是否继续？')) return;
+  var content = document.getElementById('cloud-data-content');
+  if (content) content.innerHTML = '<div style="text-align:center;padding:40px 0;color:#6B7280;">正在清空数据...</div>';
+  var xhr = new XMLHttpRequest();
+  xhr.open('PUT', JSONBIN_BASE_URL, true);
+  xhr.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
+  xhr.setRequestHeader('Content-Type', 'application/json');
+  xhr.timeout = 15000;
+  xhr.onload = function() {
+    if (xhr.status >= 200 && xhr.status < 300) {
+      cloudRecordsCache = [];
+      cloudDashboardRecords = [];
+      var content = document.getElementById('cloud-data-content');
+      if (content) content.innerHTML = '<div style="text-align:center;padding:40px 0;">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" style="width:40px;height:40px;margin-bottom:12px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>' +
+        '<div style="font-size:15px;font-weight:600;color:#059669;">数据已清空</div>' +
+        '<div style="font-size:12px;color:#6B7280;margin-top:6px;">所有云端记录已删除</div>' +
+        '<button data-action="backToCloudData" style="margin-top:16px;padding:8px 24px;border-radius:8px;border:1.5px solid #D1D5DB;background:#fff;color:#374151;font-size:12px;font-weight:600;cursor:pointer;">返回</button>' +
+        '</div>';
+    } else {
+      var content = document.getElementById('cloud-data-content');
+      if (content) content.innerHTML = '<div style="color:#DC2626;padding:20px 0;">清空失败 (HTTP ' + xhr.status + ')</div>' +
+        '<button data-action="backToCloudData" style="margin-top:12px;padding:8px 24px;border-radius:8px;border:1.5px solid #D1D5DB;background:#fff;color:#374151;font-size:12px;font-weight:600;cursor:pointer;">返回</button>';
+    }
+  };
+  xhr.onerror = function() {
+    var content = document.getElementById('cloud-data-content');
+    if (content) content.innerHTML = '<div style="color:#DC2626;">网络错误</div>' +
+      '<button data-action="backToCloudData" style="margin-top:12px;padding:8px 24px;border-radius:8px;border:1.5px solid #D1D5DB;background:#fff;color:#374151;font-size:12px;font-weight:600;cursor:pointer;">返回</button>';
+  };
+  xhr.send(JSON.stringify({ records: [] }));
+}
+
+function deleteCloudRecord(indexStr) {
+  var idx = parseInt(indexStr, 10);
+  if (isNaN(idx) || idx < 0 || idx >= cloudRecordsCache.length) return;
+  var rec = cloudRecordsCache[idx];
+  if (!confirm('确定删除这条记录吗？\n' + (rec.teamName || '') + ' ' + (rec.date || '') + ' 产值:' + (rec.actualValue || 0))) return;
+  // Build new records array without this item
+  var newRecords = [];
+  for (var i = 0; i < cloudRecordsCache.length; i++) {
+    if (i !== idx) newRecords.push(cloudRecordsCache[i]);
+  }
+  var content = document.getElementById('cloud-data-content');
+  if (content) content.innerHTML = '<div style="text-align:center;padding:40px 0;color:#6B7280;">正在删除...</div>';
+  var xhr = new XMLHttpRequest();
+  xhr.open('PUT', JSONBIN_BASE_URL, true);
+  xhr.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
+  xhr.setRequestHeader('Content-Type', 'application/json');
+  xhr.timeout = 15000;
+  xhr.onload = function() {
+    if (xhr.status >= 200 && xhr.status < 300) {
+      cloudRecordsCache = newRecords;
+      cloudDashboardRecords = newRecords;
+      showAdminPanel(); // refresh admin panel
+    } else {
+      if (content) content.innerHTML = '<div style="color:#DC2626;padding:20px 0;">删除失败 (HTTP ' + xhr.status + ')</div>' +
+        '<button data-action="backToCloudData" style="margin-top:12px;padding:8px 24px;border-radius:8px;border:1.5px solid #D1D5DB;background:#fff;color:#374151;font-size:12px;font-weight:600;cursor:pointer;">返回</button>';
+    }
+  };
+  xhr.onerror = function() {
+    if (content) content.innerHTML = '<div style="color:#DC2626;">网络错误</div>' +
+      '<button data-action="backToCloudData" style="margin-top:12px;padding:8px 24px;border-radius:8px;border:1.5px solid #D1D5DB;background:#fff;color:#374151;font-size:12px;font-weight:600;cursor:pointer;">返回</button>';
+  };
+  xhr.send(JSON.stringify({ records: newRecords }));
+}
+
+function exportCloudCSV() {
+  if (cloudRecordsCache.length === 0) { alert('暂无数据可导出'); return; }
+  var headers = ['日期','提交时间','班组','分析模式','目标产值','实际产值','达成率/DLE(%)','计划工时/有效工时','实际工时(h)','人时产值','损失工时','产值状态','效率状态','异常原因'];
+  var rows = cloudRecordsCache.map(function(r) {
+    var lossHours = (r.abnormalReasons || []).reduce(function(s, a) { return s + (a.hours || 0); }, 0);
+    var reasons = (r.abnormalReasons || []).map(function(a) { return a.reason + '(' + (a.hours||0).toFixed(1) + 'h)' + (a.note ? ':' + a.note : ''); }).join('；');
+
+    if (r.isDLE) {
+      var dle = r.dle || 0;
+      var dlePct = (dle * 100).toFixed(1);
+      var eh = r.effectiveHours || 0;
+      var ah = r.actualHours || 0;
+      var dleThr = (r.teamName === "二部二课") ? 0.80 : 0.75;
+      var effStatus = dle < dleThr ? 'DLE需分析' : 'DLE正常';
+      return [r.date||'', r.submitTime||'', r.teamName||'', 'DLE分析', '', '', dlePct, eh, ah, '', lossHours.toFixed(1), '—', effStatus, reasons].join(',');
+    } else {
+      var compRate = r.targetValue > 0 ? (r.actualValue / r.targetValue * 100).toFixed(1) : '0.0';
+      var isLowTarget = (r.targetValue || 0) < 1;
+      var outputStatus = isLowTarget ? '—' : (r.actualValue >= r.targetValue ? '达标' : '未达标');
+      var plannedPH = r.standardHours > 0 ? r.targetValue * 10000 / r.standardHours : 0;
+      var actualPH = r.actualHours > 0 ? r.actualValue * 10000 / r.actualHours : 0;
+      var hourDev = r.actualHours - r.standardHours;
+      var efficiencyStatus = isLowTarget ? (hourDev > 0 ? '需分析' : hourDev === 0 ? '工时持平' : '正常') : (actualPH >= plannedPH ? '达标' : '未达标');
+      return [r.date||'', r.submitTime||'', r.teamName||'', '人时产值分析', r.targetValue||0, r.actualValue||0, compRate, r.standardHours||0, r.actualHours||0, r.actualPH||'', lossHours.toFixed(1), outputStatus, efficiencyStatus, reasons].join(',');
+    }
+  });
+  var csv = '\uFEFF' + headers.join(',') + '\n' + rows.join('\n');
+  var blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = '云端数据_' + new Date().toISOString().slice(0,10) + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function getISOWeek(dateStr) {
+  var d = new Date(dateStr);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+  var week1 = new Date(d.getFullYear(), 0, 4);
+  return d.getFullYear() + "-W" + (1 + Math.round(((d - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7));
+}
+function getMonthKey(dateStr) {
+  var d = new Date(dateStr);
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+}
+function getWeekLabel(weekKey) {
+  // weekKey = "2026-W30" -> "7月20日-7月26日"
+  return getWeekDateRange(weekKey);
+}
+function getMonthLabel(monthKey) {
+  // monthKey = "2026-07" -> "2026年7月"
+  var parts = monthKey.split("-");
+  return parts[0] + "年" + parseInt(parts[1]) + "月";
+}
+function getWeekDateRange(weekKey) {
+  // weekKey = "2026-W30" -> "7月6日-7月12日"
+  var parts = weekKey.split("-W");
+  var year = parseInt(parts[0]);
+  var week = parseInt(parts[1]);
+  // Find Jan 4 of the year (always in ISO week 1)
+  var jan4 = new Date(year, 0, 4);
+  // Monday of week 1
+  var monWeek1 = new Date(jan4);
+  monWeek1.setDate(jan4.getDate() - (jan4.getDay() + 6) % 7);
+  // Monday of target week
+  var monday = new Date(monWeek1);
+  monday.setDate(monWeek1.getDate() + (week - 1) * 7);
+  // Sunday of target week
+  var sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  return (monday.getMonth()+1) + "月" + monday.getDate() + "日-" + (sunday.getMonth()+1) + "月" + sunday.getDate() + "日";
+}
+function formatDateShort(dateStr) {
+  var d = new Date(dateStr);
+  return (d.getMonth()+1) + "月" + d.getDate() + "日";
+}
+
+// Aggregate records by time dimension
+function aggregateRecords(records, dimension) {
+  // Apply date filter if set
+  var filtered = records;
+  if (dashboardDateFilter) {
+    filtered = records.filter(function(r) {
+      if (dimension === "day") return r.date === dashboardDateFilter;
+      if (dimension === "week") return getISOWeek(r.date) === dashboardDateFilter;
+      return getMonthKey(r.date) === dashboardDateFilter;
+    });
+  }
+  if (dimension === "day") return filtered; // no aggregation for daily view
+
+  var groups = {};
+  var groupOrder = [];
+  filtered.forEach(function(r) {
+    var timeKey;
+    if (dimension === "week") {
+      timeKey = getISOWeek(r.date);
+    } else {
+      timeKey = getMonthKey(r.date);
+    }
+    // Group by team + time period so each team's weekly/monthly data is shown separately
+    var key = (r.teamName || "未知班组") + "|" + timeKey;
+    if (!groups[key]) {
+      var timeLabel = dimension === "week" ? getWeekLabel(timeKey) : getMonthLabel(timeKey);
+      groups[key] = {
+        key: key,
+        label: r.teamName || "未知班组",
+        teamName: r.teamName || "未知班组",
+        leader: r.leader || "",
+        date: timeKey,
+        targetValue: 0,
+        actualValue: 0,
+        standardHours: 0,
+        actualHours: 0,
+        abnormalReasons: [],
+        plannedPH: 0,
+        actualPH: 0,
+        hoursGap: 0,
+        lossGap: 0,
+        totalLossAnalyzed: 0,
+        coverage: 0,
+        _count: 0,
+        _reasonMap: {}
+      };
+      groupOrder.push(key);
+    }
+    var g = groups[key];
+    g.targetValue += r.targetValue || 0;
+    g.actualValue += r.actualValue || 0;
+    g.standardHours += r.standardHours || 0;
+    g.actualHours += r.actualHours || 0;
+    g._count++;
+    // Merge abnormal reasons
+    (r.abnormalReasons || []).forEach(function(a) {
+      if (!g._reasonMap[a.reason]) {
+        g._reasonMap[a.reason] = { reason: a.reason, hours: 0, note: "", data: {} };
+      }
+      g._reasonMap[a.reason].hours += a.hours || 0;
+      if (a.note) {
+        g._reasonMap[a.reason].note = g._reasonMap[a.reason].note ? g._reasonMap[a.reason].note + "；" + a.note : a.note;
+      }
+    });
+  });
+
+  // Finalize groups
+  return groupOrder.map(function(key) {
+    var g = groups[key];
+    g.abnormalReasons = Object.values(g._reasonMap);
+    g.plannedPH = g.standardHours > 0 ? g.targetValue * 10000 / g.standardHours : 0;
+    g.actualPH = g.actualHours > 0 ? g.actualValue * 10000 / g.actualHours : 0;
+    var tv = g.targetValue, av = g.actualValue, sh = g.standardHours, ah = g.actualHours;
+    // When target value < 1万, production comparison is not meaningful; use raw hours gap instead
+    g.lowTarget = tv < 1;
+    if (g.lowTarget) {
+      g.hoursGap = (sh > 0 && ah > 0) ? ah - sh : 0;
+    } else {
+      g.hoursGap = (tv > 0 && sh > 0 && ah > 0) ? ah - sh * av / tv : 0;
+    }
+    g.lossGap = g.hoursGap > 0 ? g.hoursGap * 0.9 : 0;
+    var totalLoss = g.abnormalReasons.reduce(function(s, a) { return s + a.hours; }, 0);
+    g.totalLossAnalyzed = totalLoss;
+    g.coverage = g.lossGap > 0 ? (totalLoss / g.lossGap) * 100 : 100;
+    return g;
+  });
+}
+
+// ==================== HELPERS ====================
+function fmt(n) { return n==null?"—":Number(n).toLocaleString("zh-CN"); }
+function fmtW(n) { return n==null?"—":Number(n).toFixed(2)+"万元"; }
+function pct(a,b) { return b>0?((a/b)*100).toFixed(1):"0.0"; }
+function pctNum(a,b) { return b>0?(a/b)*100:0; }
+function getCompletionColor(rate) {
+  if(rate>=100) return "#10B981";
+  if(rate>=90) return "#4F46E5";
+  if(rate>=80) return "#F59E0B";
+  return "#EF4444";
+}
+function getCompletionLabel(rate) {
+  if(rate>=100) return "超额完成";
+  if(rate>=90) return "基本达标";
+  if(rate>=80) return "需要关注";
+  return "严重不足";
+}
+function getReasonIcon(reason) {
+  const icons = {
+    "设备原因":'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+    "模具原因":'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>',
+    "工艺原因":'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+    "品质返工":'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+    "新品调试":'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>',
+    "其他原因":'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+  };
+  return icons[reason] || icons["其他原因"];
+}
+
+// ==================== 人时产值 CALCULATIONS ====================
+// Input values are in 万元, formula: 产值(万元) * 10000 / 工时 = 元/工时
+function calcPlannedPH() {
+  return Number(answers.standardHours) > 0 ? Number(answers.targetValue) * 10000 / Number(answers.standardHours) : 0;
+}
+function calcActualPH() {
+  return Number(answers.actualHours) > 0 ? Number(answers.actualValue) * 10000 / Number(answers.actualHours) : 0;
+}
+function calcHoursGapSimple() {
+  var tv = Number(answers.targetValue) || 0;
+  var av = Number(answers.actualValue) || 0;
+  var sh = Number(answers.standardHours) || 0;
+  var ah = Number(answers.actualHours) || 0;
+  if (sh <= 0 || ah <= 0) return 0;
+  // When target value < 1万, use simple hours gap instead of proportional formula
+  if (tv < 1) return ah - sh;
+  if (tv <= 0) return 0;
+  var expectedHours = sh * av / tv;
+  return ah - expectedHours;
+}
+function calcLossGap() {
+  var hoursGap = calcHoursGapSimple();
+  return hoursGap * 0.9;
+}
+function getTotalLossHours() {
+  var reasonList = answers.reasonList || [];
+  var total = 0;
+  reasonList.forEach(function(item) {
+    var cat = findCategory(item.reason);
+    if (cat) {
+      total += cat.calcHours(item.data || {});
+    }
+  });
+  return total;
+}
+function getCoveragePct() {
+  var lossGap = calcLossGap();
+  if (lossGap <= 0) return 100;
+  return (getTotalLossHours() / lossGap) * 100;
+}
+function isActualPHBelowPlanned() {
+  var tv = Number(answers.targetValue) || 0;
+  var av = Number(answers.actualValue) || 0;
+  var sh = Number(answers.standardHours) || 0;
+  var ah = Number(answers.actualHours) || 0;
+  // When target value < 1万, use hours comparison instead of PH comparison
+  if (tv < 1) return ah > sh;
+  var plannedPH = calcPlannedPH();
+  var actualPH = calcActualPH();
+  return plannedPH > 0 && actualPH < plannedPH;
+}
+function fmtPH(n) {
+  return n > 0 ? n.toFixed(1) : "—";
+}
+function isDLEMode() {
+  return answers.teamName && (answers.teamName === "二部一课" || answers.teamName === "二部二课");
+}
+function calcDLE() {
+  var eh = Number(answers.effectiveHours) || 0;
+  var ah = Number(answers.actualHours) || 0;
+  if (ah <= 0) return 0;
+  return eh / ah;
+}
+function getDLEThreshold() {
+  if (answers.teamName === "二部二课") return 0.80;
+  return 0.75; // 二部一课 default
+}
+function fmtH(n) {
+  return n.toFixed(1) + "h";
+}
+
+// ==================== NAVIGATION ====================
+function showWelcome() {
+  document.getElementById("welcome").classList.remove("hidden");
+  document.getElementById("interview").classList.add("hidden");
+  document.getElementById("dashboard").classList.add("hidden");
+}
+function setTimeFilter(dimension) {
+  dashboardTimeFilter = dimension;
+  dashboardDateFilter = (function(){ var d=new Date(); d.setDate(d.getDate()-1); return d.toISOString().split("T")[0]; })(); // reset to yesterday
+  // Update button active states
+  document.querySelectorAll('.time-filter-btn').forEach(function(btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-param') === dimension);
+  });
+  renderDatePicker();
+  renderDashboard();
+}
+
+// ==================== DATE PICKER ====================
+function renderDatePicker() {
+  var wrap = document.getElementById("date-picker-wrap");
+  if (!wrap) return;
+  if (dashboardTimeFilter === "day") {
+    wrap.innerHTML = '<label>选择日期</label><input type="date" class="date-picker-input" id="date-picker-day" />';
+    var inp = document.getElementById("date-picker-day");
+    if (dashboardDateFilter) inp.value = dashboardDateFilter;
+    inp.addEventListener("change", function() {
+      dashboardDateFilter = this.value;
+      renderDashboard();
+    });
+  } else if (dashboardTimeFilter === "week") {
+    wrap.innerHTML = '<label>选择日期(自动算周)</label><input type="date" class="date-picker-input" id="date-picker-week" />';
+    var inp = document.getElementById("date-picker-week");
+    // If there's a week filter, show the Monday of that week
+    if (dashboardDateFilter) {
+      var parts = dashboardDateFilter.split("-W");
+      if (parts.length === 2) {
+        var jan4 = new Date(parseInt(parts[0]), 0, 4);
+        var monWeek1 = new Date(jan4);
+        monWeek1.setDate(jan4.getDate() - (jan4.getDay() + 6) % 7);
+        var monday = new Date(monWeek1);
+        monday.setDate(monWeek1.getDate() + (parseInt(parts[1]) - 1) * 7);
+        inp.value = monday.toISOString().split("T")[0];
+      }
+    }
+    inp.addEventListener("change", function() {
+      dashboardDateFilter = getISOWeek(this.value);
+      renderDashboard();
+    });
+  } else {
+    wrap.innerHTML = '<label>选择月份</label><input type="month" class="date-picker-input" id="date-picker-month" />';
+    var inp = document.getElementById("date-picker-month");
+    if (dashboardDateFilter) inp.value = dashboardDateFilter;
+    inp.addEventListener("change", function() {
+      dashboardDateFilter = this.value;
+      renderDashboard();
+    });
+  }
+}
+var cloudDashboardRecords = []; // cloud records for dashboard
+function showDashboard() {
+  document.getElementById("welcome").classList.add("hidden");
+  document.getElementById("interview").classList.add("hidden");
+  document.getElementById("dashboard").classList.remove("hidden");
+  // Show storage warning if localStorage is not available OR running in preview/iframe
+  var warnEl = document.getElementById("storage-warning");
+  if (warnEl) {
+    var showWarn = !storageAvailable || isPreviewMode;
+    warnEl.style.display = showWarn ? "block" : "none";
+    if (showWarn) warnEl.classList.remove("hidden");
+  }
+  // Sync button active states
+  document.querySelectorAll('.time-filter-btn').forEach(function(btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-param') === dashboardTimeFilter);
+  });
+  renderDatePicker();
+  // Auto-fetch cloud data and render dashboard
+  document.getElementById("dashboard-sub").textContent = '正在加载云端数据...';
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', JSONBIN_BASE_URL + '/latest', true);
+  xhr.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
+  xhr.timeout = 10000;
+  xhr.onload = function() {
+    if (xhr.status >= 200 && xhr.status < 300) {
+      try {
+        var resp = JSON.parse(xhr.responseText);
+        var data = resp.record || {};
+        cloudDashboardRecords = data.records || [];
+        renderDashboard();
+      } catch(e) {
+        document.getElementById("dashboard-sub").textContent = '云端数据加载失败';
+      }
+    } else {
+      document.getElementById("dashboard-sub").textContent = '云端数据加载失败 (HTTP ' + xhr.status + ')';
+    }
+  };
+  xhr.onerror = function() {
+    document.getElementById("dashboard-sub").textContent = '网络错误，无法加载云端数据';
+  };
+  xhr.ontimeout = function() {
+    document.getElementById("dashboard-sub").textContent = '请求超时';
+  };
+  xhr.send();
+}
+function startInterview() {
+  currentStep = 0;
+  answers = { reasonList: [] };
+  isAddingMore = false;
+  selectedReasons.clear();
+  document.getElementById("welcome").classList.add("hidden");
+  document.getElementById("dashboard").classList.add("hidden");
+  document.getElementById("interview").classList.remove("hidden");
+  renderInterview();
+}
+
+// ==================== INTERVIEW RENDER ====================
+function renderInterview() {
+  var visibleQs = getVisibleQuestions();
+  const totalSteps = visibleQs.length + 4; // +PH/DLE analysis, +reason selection, +reason details, +more analysis (if needed)
+  const progress = ((currentStep + 1) / (totalSteps + 1)) * 100;
+  document.getElementById("progress-fill").style.width = progress + "%";
+
+  // Update sub title
+  let subText = "";
+  if (currentStep < visibleQs.length) {
+    subText = "第 " + (currentStep+1) + " 题 / 共 " + visibleQs.length + " 题";
+  } else if (currentStep === visibleQs.length) {
+    subText = isDLEMode() ? "DLE分析" : "人时产值分析";
+  } else if (currentStep === visibleQs.length + 1) {
+    subText = isAddingMore ? "补充异常原因" : "异常原因";
+  } else if (currentStep === visibleQs.length + 2) {
+    subText = isAddingMore ? "补充工时详情" : "工时详情";
+  } else if (currentStep === visibleQs.length + 3) {
+    subText = "差距分析";
+  } else {
+    subText = "采访完成";
+  }
+  document.getElementById("interview-sub").textContent = subText;
+
+  // Render chat history - rebuild to reflect latest answers
+  const chatHistory = document.getElementById("chat-history");
+  chatHistory.innerHTML = "";
+  for (let i = 0; i < Math.min(currentStep, visibleQs.length); i++) {
+    const q = visibleQs[i];
+    const val = answers[q.id];
+    let displayVal = val;
+    if (q.inputType === "number") {
+      if (q.id.includes("Value")) displayVal = fmtW(val);
+      else displayVal = (val !== undefined && val !== "") ? val + " 小时" : "—";
+    }
+    chatHistory.innerHTML += '<div class="chat-msg question"><div class="chat-bubble">'+q.label+'</div></div>';
+    chatHistory.innerHTML += '<div class="chat-msg answer"><div class="chat-bubble">'+(displayVal !== undefined && displayVal !== "" ? displayVal : "—")+'</div></div>';
+  }
+  // Add PH/DLE analysis to chat if past analysis step
+  if (currentStep > visibleQs.length) {
+    if (isDLEMode()) {
+      var dle = calcDLE();
+      var thr = getDLEThreshold();
+      var thrPct = (thr * 100).toFixed(0);
+      chatHistory.innerHTML += '<div class="chat-msg question"><div class="chat-bubble">DLE分析：有效工时 '+fmtH(Number(answers.effectiveHours)||0)+' / 实际工时 '+fmtH(Number(answers.actualHours)||0)+' = '+(dle*100).toFixed(1)+'%</div></div>';
+      if (dle < thr) {
+        chatHistory.innerHTML += '<div class="chat-msg answer"><div class="chat-bubble">DLE低于'+thrPct+'%，需进行异常分析</div></div>';
+      } else {
+        chatHistory.innerHTML += '<div class="chat-msg answer"><div class="chat-bubble">DLE达到或超过'+thrPct+'%，无需异常分析</div></div>';
+      }
+    } else {
+      var plannedPH = calcPlannedPH();
+      var actualPH = calcActualPH();
+      var compRate = pctNum(answers.actualValue, answers.targetValue);
+      chatHistory.innerHTML += '<div class="chat-msg question"><div class="chat-bubble">人时产值分析：计划 '+fmtPH(plannedPH)+' vs 实际 '+fmtPH(actualPH)+'，达成率 '+compRate.toFixed(1)+'%</div></div>';
+      if (isActualPHBelowPlanned()) {
+        var hoursGap = calcHoursGapSimple();
+        var lossGap = calcLossGap();
+        chatHistory.innerHTML += '<div class="chat-msg answer"><div class="chat-bubble">实际低于计划，工时差距 '+hoursGap.toFixed(1)+' 小时</div></div>';
+      } else {
+        chatHistory.innerHTML += '<div class="chat-msg answer"><div class="chat-bubble">实际达到或超过计划，无需异常分析</div></div>';
+      }
+    }
+  }
+  // Add reason/answer history if we've passed reason selection
+  if (currentStep > visibleQs.length + 1) {
+    var reasonList = answers.reasonList || [];
+    let reasonText = "无异常";
+    if (reasonList.length > 0) {
+      reasonText = reasonList.map(function(item) {
+        var cat = findCategory(item.reason);
+        var hours = cat ? cat.calcHours(item.data || {}) : 0;
+        var note = item.note || "";
+        return item.reason + "（" + hours.toFixed(1) + "小时" + (note ? "，" + note : "") + "）";
+      }).join("、");
+    }
+    chatHistory.innerHTML += '<div class="chat-msg question"><div class="chat-bubble">是否存在以下异常原因？</div></div>';
+    chatHistory.innerHTML += '<div class="chat-msg answer"><div class="chat-bubble">'+reasonText+'</div></div>';
+  }
+  // Render current question card
+  const card = document.getElementById("question-card");
+  if (currentStep < visibleQs.length) {
+    const q = visibleQs[currentStep];
+    currentQid = q.id; // set global for input handler
+    var inputHtml = '';
+    if (q.inputType === 'select') {
+      inputHtml = '<select class="question-input" id="current-input" style="appearance:auto;cursor:pointer" autofocus>';
+      inputHtml += '<option value="">'+q.placeholder+'</option>';
+      TEAM_OPTIONS.forEach(function(opt) {
+        inputHtml += '<option value="'+opt+'"'+(answers[q.id]===opt?' selected':'')+'>'+opt+'</option>';
+      });
+      inputHtml += '</select>';
+    } else {
+      var defaultVal = answers[q.id] || "";
+      if (q.id === "date" && !defaultVal) {
+        defaultVal = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+        answers[q.id] = defaultVal;
+      }
+      inputHtml = '<input class="question-input" type="'+q.inputType+'" placeholder="'+q.placeholder+'" value="'+defaultVal+'" id="current-input" autofocus/>';
+    }
+    card.innerHTML = '<div class="question-header"><div class="question-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#4F46E5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div><span class="question-label">'+q.label+'</span></div>'+inputHtml+'<div id="nav-container"></div>';
+    // Attach event listeners via addEventListener (CSP-safe)
+    var inputEl = document.getElementById("current-input");
+    if (q.inputType === 'select') {
+      inputEl.addEventListener('change', function() { onMainInput(this); });
+    } else {
+      inputEl.addEventListener('input', function() { onMainInput(this); });
+      inputEl.addEventListener('keydown', function(e) { if(e.key==='Enter'&&canProceed()) goNext(); });
+    }
+    if (q.inputType !== 'select') {
+      setTimeout(() => document.getElementById("current-input").focus(), 50);
+    }
+    renderNavButtons();
+  } else if (currentStep === visibleQs.length) {
+    renderPHAnalysis();
+  } else if (currentStep === visibleQs.length + 1) {
+    renderReasonSelection();
+  } else if (currentStep === visibleQs.length + 2) {
+    renderReasonDetails();
+  } else if (currentStep === visibleQs.length + 3) {
+    renderMoreAnalysis();
+  } else {
+    renderCompletion();
+  }
+  // Auto-scroll to the current question card so it's always visible on mobile
+  setTimeout(function() {
+    var card = document.getElementById("question-card");
+    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, 100);
+}
+
+function renderPHAnalysis() {
+  var card = document.getElementById("question-card");
+  var html = '';
+
+  if (isDLEMode()) {
+    // DLE mode analysis
+    var dle = calcDLE();
+    var dlePct = (dle * 100).toFixed(1);
+    var threshold = getDLEThreshold();
+    var thresholdPct = (threshold * 100).toFixed(0);
+    var belowThreshold = dle < threshold;
+    var eh = Number(answers.effectiveHours) || 0;
+    var ah = Number(answers.actualHours) || 0;
+
+    html += '<div class="question-header"><div class="question-icon'+(belowThreshold?' danger':'')+'"><svg viewBox="0 0 24 24" fill="none" stroke="'+(belowThreshold?'#DC2626':'#10B981')+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div><span class="question-label">DLE分析</span></div>';
+
+    // Effective vs Actual comparison grid
+    html += '<div class="analysis-grid">';
+    html += '<div class="analysis-item"><div class="analysis-item-label">有效工时</div><div class="analysis-item-value" style="color:#4F46E5">'+fmtH(eh)+'</div><div class="analysis-item-sub">当日有效产出工时</div></div>';
+    html += '<div class="analysis-item"><div class="analysis-item-label">实际工时</div><div class="analysis-item-value" style="color:#6B7280">'+fmtH(ah)+'</div><div class="analysis-item-sub">当日总实际工时</div></div>';
+    html += '</div>';
+
+    // DLE rate
+    var dleColor = belowThreshold ? '#EF4444' : '#10B981';
+    html += '<div style="padding:12px 14px;background:#F9FAFB;border-radius:10px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">';
+    html += '<span style="font-size:13px;color:#6B7280">DLE（有效工时/实际工时）</span>';
+    html += '<span style="font-size:16px;font-weight:700;color:'+dleColor+'">'+dlePct+'%</span>';
+    html += '</div>';
+
+    // Threshold comparison
+    html += '<div style="padding:12px 14px;background:'+(belowThreshold?'#FEF2F2':'#ECFDF5')+';border-radius:10px;border:1px solid '+(belowThreshold?'#FECACA':'#A7F3D0')+';font-size:14px;color:'+(belowThreshold?'#991B1B':'#065F46')+';font-weight:500">';
+    if (belowThreshold) {
+      html += 'DLE低于'+thresholdPct+'%阈值，需进行异常分析';
+    } else {
+      html += 'DLE达到或超过'+thresholdPct+'%，无需异常分析';
+    }
+    html += '</div>';
+
+    html += '<div id="nav-container"></div>';
+    card.innerHTML = html;
+
+    // Render nav buttons
+    var navContainer = document.getElementById("nav-container");
+    if (!navContainer) return;
+    var navHtml = '<div class="nav-buttons"><button class="btn-nav btn-prev" data-action="goPrev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> 上一题</button>';
+    if (belowThreshold) {
+      navHtml += '<button class="btn-nav btn-next primary" data-action="goNext">下一题 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>';
+    } else {
+      navHtml += '<button class="btn-nav btn-next primary" data-action="goNext">完成 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>';
+    }
+    navHtml += '</div>';
+    navContainer.innerHTML = navHtml;
+    return;
+  }
+
+  // Normal mode: PH analysis
+  var plannedPH = calcPlannedPH();
+  var actualPH = calcActualPH();
+  var compRate = pctNum(answers.actualValue, answers.targetValue);
+  var belowPlanned = isActualPHBelowPlanned();
+
+  html += '<div class="question-header"><div class="question-icon'+(belowPlanned?' danger':'')+'"><svg viewBox="0 0 24 24" fill="none" stroke="'+(belowPlanned?'#DC2626':'#10B981')+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div><span class="question-label">人时产值对比分析</span></div>';
+
+  // Planned vs Actual comparison grid
+  html += '<div class="analysis-grid">';
+  html += '<div class="analysis-item"><div class="analysis-item-label">计划人时产值</div><div class="analysis-item-value" style="color:#4F46E5">'+fmtPH(plannedPH)+'</div><div class="analysis-item-sub">元/工时（目标 '+fmtW(answers.targetValue)+' / 计划 '+answers.standardHours+'h）</div></div>';
+  html += '<div class="analysis-item '+(belowPlanned?'warn':'ok')+'"><div class="analysis-item-label">实际人时产值</div><div class="analysis-item-value" style="color:'+(belowPlanned?'#EF4444':'#10B981')+'">'+fmtPH(actualPH)+'</div><div class="analysis-item-sub">元/工时（实际 '+fmtW(answers.actualValue)+' / 实际 '+answers.actualHours+'h）</div></div>';
+  html += '</div>';
+
+  // Achievement rate
+  var phRate = plannedPH > 0 ? (actualPH / plannedPH * 100) : 0;
+  var rateColor = phRate >= 100 ? '#10B981' : phRate >= 90 ? '#4F46E5' : '#EF4444';
+  html += '<div style="padding:12px 14px;background:#F9FAFB;border-radius:10px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">';
+  html += '<span style="font-size:13px;color:#6B7280">产值达成率</span>';
+  html += '<span style="font-size:16px;font-weight:700;color:'+getCompletionColor(compRate)+'">'+compRate.toFixed(1)+'%</span>';
+  html += '</div>';
+
+  html += '<div style="padding:12px 14px;background:'+(belowPlanned?'#FEF2F2':'#ECFDF5')+';border-radius:10px;border:1px solid '+(belowPlanned?'#FECACA':'#A7F3D0')+';font-size:14px;color:'+(belowPlanned?'#991B1B':'#065F46')+';font-weight:500">';
+  if (belowPlanned) {
+    var hoursGap = calcHoursGapSimple();
+    var lossGap = calcLossGap();
+    html += '实际人时产值低于计划，工时差距 <strong>'+hoursGap.toFixed(1)+'</strong> 小时';
+  } else {
+    html += '实际人时产值达到或超过计划，无需异常分析';
+  }
+  html += '</div>';
+
+  html += '<div id="nav-container"></div>';
+  card.innerHTML = html;
+
+  // Render custom nav buttons for PH analysis step
+  var navContainer = document.getElementById("nav-container");
+  if (!navContainer) return;
+  var navHtml = '<div class="nav-buttons"><button class="btn-nav btn-prev" data-action="goPrev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> 上一题</button>';
+  if (belowPlanned) {
+    navHtml += '<button class="btn-nav btn-next primary" data-action="goNext">下一题 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>';
+  } else {
+    navHtml += '<button class="btn-nav btn-next primary" data-action="goNext">完成 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>';
+  }
+  navHtml += '</div>';
+  navContainer.innerHTML = navHtml;
+}
+
+function renderReasonSelection() {
+  const reasonList = answers.reasonList || [];
+  const card = document.getElementById("question-card");
+  let html = '<div class="question-header"><div class="question-icon warning"><svg viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div><span class="question-label">请选择异常原因（可多选）</span></div>';
+
+  REASON_CATEGORIES.forEach(function(cat) {
+    html += '<div style="margin-bottom:16px">';
+    html += '<div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:4px">'+cat.label+'</div>';
+    html += '<div style="font-size:12px;color:#9CA3AF;margin-bottom:8px">'+cat.desc+'</div>';
+    html += '<div class="reason-grid">';
+    cat.options.forEach(function(r) {
+      var color = REASON_COLORS[r];
+      var isSelected = selectedReasons.has(r);
+      html += '<button class="reason-btn'+(isSelected?' selected':'')+'" style="'+(isSelected?'--reason-color:'+color+';--reason-bg:'+color+'15;':'')+'" data-action="toggleReason" data-reason-name="'+r+'">'+getReasonIcon(r)+r+(isSelected?' <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-left:2px"><polyline points="20 6 9 17 4 12"/></svg>':'')+'</button>';
+    });
+    html += '</div></div>';
+  });
+
+  var selCount = selectedReasons.size;
+  if (selCount === 0) {
+    html += '<p class="reason-hint">未选择则视为无异常，将跳过工时详情</p>';
+  } else {
+    html += '<p class="reason-hint">已选择 '+selCount+' 项异常原因</p>';
+  }
+  html += '<div id="nav-container"></div>';
+  card.innerHTML = html;
+  renderNavButtons();
+}
+
+function renderReasonDetails() {
+  const reasonList = answers.reasonList || [];
+  const card = document.getElementById("question-card");
+  let html = '<div class="question-header"><div class="question-icon danger"><svg viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><span class="question-label">填写各异常原因的详细信息</span></div>';
+
+  // Show 人时产值 coverage info if actual PH < planned PH
+  if (isActualPHBelowPlanned()) {
+    var plannedPH = calcPlannedPH();
+    var actualPH = calcActualPH();
+    var hoursGap = calcHoursGapSimple();
+    var lossGap = calcLossGap();
+    var totalLoss = getTotalLossHours();
+    var cov = getCoveragePct();
+    var covColor = cov >= 90 ? '#10B981' : cov >= 60 ? '#F59E0B' : '#EF4444';
+    html += '<div class="analysis-grid">';
+    html += '<div class="analysis-item'+(actualPH<plannedPH?' warn':' ok')+'"><div class="analysis-item-label">计划人时产值</div><div class="analysis-item-value" style="color:#4F46E5">'+fmtPH(plannedPH)+'</div><div class="analysis-item-sub">元/工时</div></div>';
+    html += '<div class="analysis-item'+(actualPH<plannedPH?' warn':' ok')+'"><div class="analysis-item-label">实际人时产值</div><div class="analysis-item-value" style="color:'+(actualPH<plannedPH?'#EF4444':'#10B981')+'">'+fmtPH(actualPH)+'</div><div class="analysis-item-sub">元/工时</div></div>';
+    html += '</div>';
+    html += '<div style="padding:10px 14px;background:#FEF2F2;border-radius:10px;margin-bottom:12px;font-size:13px;color:#991B1B">工时差距：<strong>'+hoursGap.toFixed(1)+'</strong> 小时</div>';
+    html += '<div class="coverage-bar-wrap"><div class="coverage-text" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:13px;color:#6B7280">已分析覆盖率</span><span style="font-size:13px;font-weight:700;color:'+covColor+'">'+totalLoss.toFixed(1)+' / '+lossGap.toFixed(1)+' 小时 ('+cov.toFixed(0)+'%)</span></div><div class="coverage-bar"><div class="coverage-bar-fill" style="width:'+Math.min(cov,100)+'%;background:'+covColor+'"></div></div></div>';
+  }
+
+  // Group reason in reasonList by category, preserving order
+  REASON_CATEGORIES.forEach(function(cat) {
+    // Find all reasonList items that belong to this category
+    var catItems = [];
+    reasonList.forEach(function(item, idx) {
+      if (cat.options.indexOf(item.reason) >= 0) {
+        catItems.push({ item: item, idx: idx });
+      }
+    });
+    if (catItems.length === 0) return;
+
+    html += '<div style="margin-bottom:16px">';
+    html += '<div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #E5E7EB">'+cat.label+' <span style="font-size:12px;color:#9CA3AF;font-weight:400">'+cat.desc+'</span></div>';
+
+    catItems.forEach(function(entry) {
+      var r = entry.item.reason;
+      var idx = entry.idx;
+      var rd = entry.item.data || {};
+      var noteVal = entry.item.note || "";
+      var color = REASON_COLORS[r] || '#6B7280';
+
+      html += '<div class="reason-detail-item" style="flex-direction:column;align-items:stretch;margin-bottom:12px;padding:14px;border:1px solid '+color+'30;border-radius:12px;background:'+color+'08">';
+      html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">';
+      html += '<div class="reason-detail-icon" style="background:'+color+'20">'+getReasonIcon(r).replace('stroke="currentColor"','stroke="'+color+'"')+'</div>';
+      html += '<span class="reason-detail-label" style="font-weight:600">'+r+'</span>';
+
+      // Show calculated hours
+      var calcH = cat.calcHours(rd);
+      html += '<span style="margin-left:auto;font-size:13px;font-weight:700;color:'+color+'">合计：<span id="calc-hours-'+idx+'">'+(calcH>0?calcH.toFixed(1):'0')+'</span> 小时</span>';
+      html += '</div>';
+
+      // Input fields based on category
+      cat.fields.forEach(function(f) {
+        var val = rd[f] || "";
+        var label = cat.fieldLabels[f] || f;
+        var isText = f === 'productModel';
+        html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">';
+        html += '<label style="font-size:13px;color:#6B7280;min-width:120px">'+label+'</label>';
+        if (isText) {
+          html += '<input class="reason-field-input" type="text" placeholder="请输入'+label+'" value="'+val+'" style="--reason-color:'+color+'" id="reason-field-'+idx+'-'+f+'" data-idx="'+idx+'" data-field="'+f+'"/>';
+        } else {
+          html += '<input class="reason-field-input" type="number" placeholder="请输入'+label+'" value="'+val+'" style="--reason-color:'+color+'" id="reason-field-'+idx+'-'+f+'" data-idx="'+idx+'" data-field="'+f+'"/>';
+        }
+        html += '</div>';
+      });
+
+      // Note textarea - use reason-specific placeholder
+      var notePh = (cat.notePlaceholders && cat.notePlaceholders[r]) || "请说明具体原因";
+      html += '<div style="display:flex;align-items:flex-start;gap:8px;margin-top:4px">';
+      html += '<label style="font-size:13px;color:#6B7280;min-width:120px;padding-top:8px">备注说明</label>';
+      html += '<textarea class="reason-detail-note" placeholder="'+notePh+'" style="--reason-color:'+color+'" id="reason-note-'+idx+'" data-idx="'+idx+'">'+noteVal+'</textarea>';
+      html += '</div>';
+
+      html += '</div>';
+    });
+    html += '</div>';
+  });
+
+  const totalLoss2 = getTotalLossHours();
+  html += '<div class="loss-total">损失工时合计：<strong>'+totalLoss2.toFixed(1)+'</strong> 小时</div>';
+
+  // Validation status feedback
+  var _canGo = canProceed();
+  if (!_canGo && reasonList.length > 0) {
+    var _incomplete = [];
+    reasonList.forEach(function(item) {
+      var cat = findCategory(item.reason);
+      if (!cat) return;
+      var rd = item.data || {};
+      var missing = [];
+      cat.fields.forEach(function(f) {
+        var val = rd[f];
+        if (f === 'productModel') { if (val === undefined || (typeof val === 'string' && val.trim() === "")) missing.push(cat.fieldLabels[f]); }
+        else { if (val === undefined || val === "" || Number(val) <= 0) missing.push(cat.fieldLabels[f]); }
+      });
+      var note = item.note;
+      if (note === undefined || (typeof note === 'string' && note.trim() === "")) missing.push("备注说明");
+      if (missing.length > 0) _incomplete.push({ reason: item.reason, missing: missing });
+    });
+    if (_incomplete.length > 0) {
+      html += '<div id="validation-msg" style="margin-top:10px;padding:10px 14px;background:#FEF3C7;border-radius:10px;font-size:12px;color:#92400E;border:1px solid #FDE68A">';
+      html += '<div style="font-weight:600;margin-bottom:4px">以下原因信息不完整：</div>';
+      _incomplete.forEach(function(item) {
+        html += '<div style="margin-top:2px">• '+item.reason+'：还需填写 '+item.missing.join('、')+'</div>';
+      });
+      html += '</div>';
+    } else if (isActualPHBelowPlanned() && getCoveragePct() < 90) {
+      html += '<div id="validation-msg" style="margin-top:10px;padding:10px 14px;background:#FEF3C7;border-radius:10px;font-size:12px;color:#92400E;border:1px solid #FDE68A">';
+      html += '覆盖率需达到 90% 才能继续，当前 '+getCoveragePct().toFixed(0)+'%，请点击下方"添加更多损失原因"补充分析';
+      html += '</div>';
+    }
+  }
+
+  html += '<div id="nav-container"></div>';
+  card.innerHTML = html;
+
+  // Event delegation for reason field inputs (uses data-idx instead of data-reason)
+  card.addEventListener('input', function(e) {
+    var t = e.target;
+    if (t.classList.contains('reason-field-input')) {
+      onReasonFieldInput(t, Number(t.getAttribute('data-idx')), t.getAttribute('data-field'));
+    } else if (t.classList.contains('reason-detail-note')) {
+      onNoteInput(t, Number(t.getAttribute('data-idx')));
+    }
+  });
+  card.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && e.target.classList.contains('reason-field-input') && canProceed()) {
+      goNext();
+    }
+  });
+
+  // Focus first input
+  if (reasonList.length > 0) {
+    setTimeout(function() {
+      var firstItem = reasonList[0];
+      var firstCat = findCategory(firstItem.reason);
+      if (firstCat) {
+        var firstField = firstCat.fields[0];
+        var firstInput = document.getElementById("reason-field-0-" + firstField);
+        if (firstInput) firstInput.focus();
+      }
+    }, 50);
+  }
+
+  // Render nav buttons (will be dynamically updated by renderNavButtons on input)
+  renderNavButtons();
+}
+
+function renderMoreAnalysis() {
+  const card = document.getElementById("question-card");
+  const plannedPH = calcPlannedPH();
+  const actualPH = calcActualPH();
+  const hoursGap = calcHoursGapSimple();
+  const lossGap = calcLossGap();
+  const totalLoss = getTotalLossHours();
+  const cov = getCoveragePct();
+  const covColor = cov >= 90 ? '#10B981' : cov >= 60 ? '#F59E0B' : '#EF4444';
+  const reasonList = answers.reasonList || [];
+
+  let html = '<div class="question-header"><div class="question-icon danger"><svg viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div><span class="question-label">差距分析：还需补充损失工时</span></div>';
+
+  // Analysis summary
+  html += '<div class="analysis-grid">';
+  html += '<div class="analysis-item warn"><div class="analysis-item-label">计划人时产值</div><div class="analysis-item-value" style="color:#4F46E5">'+fmtPH(plannedPH)+'</div></div>';
+  html += '<div class="analysis-item warn"><div class="analysis-item-label">实际人时产值</div><div class="analysis-item-value" style="color:#EF4444">'+fmtPH(actualPH)+'</div></div>';
+  html += '</div>';
+
+  html += '<div style="padding:10px 14px;background:#FEF2F2;border-radius:10px;margin-bottom:12px;font-size:13px;color:#991B1B">工时差距：<strong>'+hoursGap.toFixed(1)+'</strong> 小时</div>';
+
+  // Coverage bar
+  html += '<div class="coverage-bar-wrap"><div class="coverage-text" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:13px;color:#6B7280">已分析覆盖率</span><span style="font-size:13px;font-weight:700;color:'+covColor+'">'+totalLoss.toFixed(1)+' / '+lossGap.toFixed(1)+' 小时 ('+cov.toFixed(0)+'%)</span></div><div class="coverage-bar"><div class="coverage-bar-fill" style="width:'+Math.min(cov,100)+'%;background:'+covColor+'"></div></div></div>';
+
+  // Current analyzed reasons
+  if (reasonList.length > 0) {
+    html += '<div style="margin-bottom:12px"><div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:8px">已分析原因：</div>';
+    reasonList.forEach(function(item, i) {
+      var r = item.reason;
+      var color = REASON_COLORS[r] || '#6B7280';
+      var cat = findCategory(r);
+      var hours = cat ? cat.calcHours(item.data || {}) : 0;
+      var note = item.note || "";
+      html += '<div style="padding:8px 10px;background:'+color+'10;border-radius:8px;margin-bottom:6px;border:1px solid '+color+'30">';
+      html += '<div style="display:flex;align-items:center;gap:8px"><span style="font-size:13px;color:#374151;font-weight:500">'+(i+1)+'. '+r+'</span><span style="font-size:12px;font-weight:700;color:'+color+';margin-left:auto">'+hours.toFixed(1)+' 小时</span></div>';
+      if (note) { html += '<div style="font-size:12px;color:#6B7280;margin-top:4px;border-top:1px solid '+color+'20;padding-top:4px">'+note+'</div>'; }
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  // Add more button
+  html += '<button class="btn-add-reasons" data-action="addMoreReasons"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> 添加更多损失原因</button>';
+
+  // Nav buttons
+  html += '<div id="nav-container"></div>';
+  card.innerHTML = html;
+
+  // Render nav buttons
+  var navContainer = document.getElementById("nav-container");
+  if (!navContainer) return;
+  var canFinish = cov >= 90;
+  var navHtml = '<div class="nav-buttons"><button class="btn-nav btn-prev" data-action="goPrev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> 返回</button>';
+  if (canFinish) {
+    navHtml += '<button class="btn-nav btn-next primary" data-action="goNext">完成分析 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>';
+  } else {
+    navHtml += '<button class="btn-nav btn-next primary" disabled>需覆盖90%差距 ('+cov.toFixed(0)+'%)</button>';
+  }
+  navHtml += '</div>';
+  navContainer.innerHTML = navHtml;
+}
+
+function addMoreReasons() {
+  // Save current form values before navigating away
+  saveReasonFieldValues();
+  isAddingMore = true;
+  currentStep = QUESTIONS.length + 1; // go back to reason selection
+  renderInterview();
+}
+
+// Save all form field values to answers.reasonList before re-rendering
+function saveReasonFieldValues() {
+  var reasonList = answers.reasonList || [];
+  // Save all reason field inputs
+  document.querySelectorAll('.reason-field-input').forEach(function(input) {
+    var idx = Number(input.getAttribute('data-idx'));
+    var field = input.getAttribute('data-field');
+    if (idx >= 0 && idx < reasonList.length && field) {
+      if (!reasonList[idx].data) reasonList[idx].data = {};
+      reasonList[idx].data[field] = input.type === 'number' ? Number(input.value) : input.value;
+    }
+  });
+  // Save all reason note textareas
+  document.querySelectorAll('.reason-detail-note').forEach(function(textarea) {
+    var idx = Number(textarea.getAttribute('data-idx'));
+    if (idx >= 0 && idx < reasonList.length) {
+      reasonList[idx].note = textarea.value;
+    }
+  });
+}
+
+// Show inline reason picker - simplified, no longer needed since reason selection page handles adding
+function showAddReasonPicker() {
+  // This function is kept for backward compatibility but is no longer used in the new flow
+  // Users add reasons from the reason selection page instead
+}
+
+// Add a new reason entry to reasonList and re-render the reason details
+function toggleReason(reasonName) {
+  if (selectedReasons.has(reasonName)) {
+    selectedReasons.delete(reasonName);
+  } else {
+    selectedReasons.add(reasonName);
+  }
+  renderReasonSelection();
+}
+
+function pickNewReason(reasonName) {
+  // Save current form values before adding new reason
+  saveReasonFieldValues();
+
+  if (!answers.reasonList) answers.reasonList = [];
+  answers.reasonList.push({ id: genReasonId(), reason: reasonName, data: {}, note: "" });
+  // Re-render reason details to show the new card
+  renderReasonDetails();
+}
+
+function renderCompletion() {
+  const card = document.getElementById("question-card");
+  const rate = pctNum(answers.actualValue, answers.targetValue);
+  const color = getCompletionColor(rate);
+  const metGoal = !isActualPHBelowPlanned();
+  let html = '<div class="completion">';
+
+  if (metGoal) {
+    // Team met or exceeded the goal - show congratulatory message
+    var plannedPH = calcPlannedPH();
+    var actualPH = calcActualPH();
+    var phRate = plannedPH > 0 ? (actualPH / plannedPH * 100) : 0;
+    html += '<div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#ECFDF5,#D1FAE5);display:flex;align-items:center;justify-content:center;margin:0 auto 20px"><svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:32px;height:32px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>';
+    html += '<h3 style="font-size:20px;color:#065F46;margin-bottom:8px">谢谢你们班组的努力，完成了目标</h3>';
+    html += '<p><strong>'+answers.teamName+'</strong> · '+answers.date+'</p>';
+    html += '<p class="rate">产值达成率：<strong style="color:'+color+'">'+pct(answers.actualValue, answers.targetValue)+'%</strong></p>';
+    // PH summary
+    html += '<div style="text-align:left;margin:16px 0;padding:14px 16px;background:#ECFDF5;border-radius:12px;border:1px solid #A7F3D0">';
+    html += '<div style="font-size:13px;font-weight:600;color:#065F46;margin-bottom:10px">人时产值达成</div>';
+    html += '<div style="display:flex;gap:20px;margin-bottom:4px"><div><span style="font-size:12px;color:#6B7280">计划：</span><span style="font-size:14px;font-weight:700;color:#4F46E5">'+fmtPH(plannedPH)+'</span></div>';
+    html += '<div><span style="font-size:12px;color:#6B7280">实际：</span><span style="font-size:14px;font-weight:700;color:#10B981">'+fmtPH(actualPH)+'</span></div>';
+    html += '<div><span style="font-size:12px;color:#6B7280">达成：</span><span style="font-size:14px;font-weight:700;color:#10B981">'+phRate.toFixed(1)+'%</span></div></div>';
+    html += '</div>';
+  } else {
+    // Team did not meet the goal - show analysis summary
+    html += '<div class="completion-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div><h3>采访完成！</h3><p><strong>'+answers.teamName+'</strong> · '+answers.date+'</p><p class="rate">产值达成率：<strong style="color:'+color+'">'+pct(answers.actualValue, answers.targetValue)+'%</strong></p>';
+    var plannedPH = calcPlannedPH();
+    var actualPH = calcActualPH();
+    var phRate = plannedPH > 0 ? (actualPH / plannedPH * 100) : 0;
+    var hoursGap = calcHoursGapSimple();
+    var lossGap = calcLossGap();
+    var totalLoss = getTotalLossHours();
+    var cov = getCoveragePct();
+    html += '<div style="text-align:left;margin:16px 0;padding:14px 16px;background:#F9FAFB;border-radius:12px;border:1px solid #E5E7EB">';
+    html += '<div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:10px">人时产值分析</div>';
+    html += '<div style="display:flex;gap:20px;margin-bottom:8px"><div><span style="font-size:12px;color:#6B7280">计划：</span><span style="font-size:14px;font-weight:700;color:#4F46E5">'+fmtPH(plannedPH)+'</span></div>';
+    html += '<div><span style="font-size:12px;color:#6B7280">实际：</span><span style="font-size:14px;font-weight:700;color:#EF4444">'+fmtPH(actualPH)+'</span></div>';
+    html += '<div><span style="font-size:12px;color:#6B7280">达成：</span><span style="font-size:14px;font-weight:700;color:#F59E0B">'+phRate.toFixed(1)+'%</span></div></div>';
+    html += '<div style="font-size:12px;color:#6B7280">工时差距 '+hoursGap.toFixed(1)+'h，已分析 '+totalLoss.toFixed(1)+'h（'+cov.toFixed(0)+'%）</div>';
+    html += '</div>';
+  }
+
+  html += '<button class="btn-submit" data-action="submitInterview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> 提交并查看看板</button></div>';
+  card.innerHTML = html;
+}
+
+function renderNavButtons() {
+  const navContainer = document.getElementById("nav-container");
+  if (!navContainer) return;
+  var visibleQs = getVisibleQuestions();
+  // Skip nav for step that renders its own custom buttons
+  if (currentStep === visibleQs.length + 3) return;
+  const isLastMain = currentStep === visibleQs.length - 1;
+  const isReasonDetails = currentStep === visibleQs.length + 2;
+  let html = '<div class="nav-buttons"><button class="btn-nav btn-prev"'+(currentStep===0?' disabled':'')+' data-action="goPrev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> '+(isReasonDetails ? '上一步' : '上一题')+'</button>';
+  if (isLastMain) {
+    html += '<button class="btn-nav btn-next primary"'+(canProceed()?'':' disabled')+' data-action="goNext">下一题 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>';
+  } else {
+    html += '<button class="btn-nav btn-next'+(isReasonDetails?' primary':'')+'"'+(canProceed()?'':' disabled')+' data-action="goNext">下一题 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>';
+  }
+  html += '</div>';
+  navContainer.innerHTML = html;
+  // Update validation message for reason details step
+  if (isReasonDetails) {
+    var valMsg = document.getElementById("validation-msg");
+    if (valMsg) {
+      var canGo = canProceed();
+      if (!canGo) {
+        var reasonList = answers.reasonList || [];
+        var _incomplete = [];
+        reasonList.forEach(function(item) {
+          var cat = findCategory(item.reason);
+          if (!cat) return;
+          var rd = item.data || {};
+          var missing = [];
+          cat.fields.forEach(function(f) {
+            var val = rd[f];
+            if (f === 'productModel') { if (val === undefined || (typeof val === 'string' && val.trim() === "")) missing.push(cat.fieldLabels[f]); }
+            else { if (val === undefined || val === "" || Number(val) <= 0) missing.push(cat.fieldLabels[f]); }
+          });
+          var note = item.note;
+          if (note === undefined || (typeof note === 'string' && note.trim() === "")) missing.push("备注说明");
+          if (missing.length > 0) _incomplete.push({ reason: item.reason, missing: missing });
+        });
+        if (_incomplete.length > 0) {
+          var msgHtml = '<div style="font-weight:600;margin-bottom:4px">以下原因信息不完整：</div>';
+          _incomplete.forEach(function(item) {
+            msgHtml += '<div style="margin-top:2px">• '+item.reason+'：还需填写 '+item.missing.join('、')+'</div>';
+          });
+          valMsg.innerHTML = msgHtml;
+          valMsg.style.display = '';
+        }
+      } else {
+        valMsg.style.display = 'none';
+      }
+    }
+  }
+}
+
+// ==================== INTERVIEW LOGIC ====================
+// Global input handler - called from oninput attribute, uses currentQid global
+function onMainInput(el) {
+  var visibleQs = getVisibleQuestions();
+  var q = visibleQs[currentStep];
+  if (q.inputType === "number") {
+    answers[q.id] = el.value === "" ? "" : Number(el.value);
+  } else {
+    answers[q.id] = el.value;
+  }
+  renderNavButtons();
+}
+
+// Global handler for reason detail field inputs (uses reasonList index)
+function onReasonFieldInput(el, idx, fieldName) {
+  var reasonList = answers.reasonList || [];
+  if (idx < 0 || idx >= reasonList.length) return;
+  var item = reasonList[idx];
+  var cat = findCategory(item.reason);
+  if (!cat) return;
+  if (!item.data) item.data = {};
+  var isText = fieldName === 'productModel';
+  item.data[fieldName] = isText ? el.value : (el.value === "" ? "" : Number(el.value));
+  // Update calculated hours display for this reason
+  var calcEl = document.getElementById("calc-hours-" + idx);
+  if (calcEl) {
+    var h = cat.calcHours(item.data);
+    calcEl.textContent = h > 0 ? h.toFixed(1) : '0';
+  }
+  updateCoverageDisplay();
+  renderNavButtons();
+}
+
+// Global handler for reason notes (uses reasonList index)
+function onNoteInput(el, idx) {
+  var reasonList = answers.reasonList || [];
+  if (idx < 0 || idx >= reasonList.length) return;
+  reasonList[idx].note = el.value;
+  updateCoverageDisplay();
+  renderNavButtons();
+}
+
+// Update coverage bar and total without re-rendering inputs (preserves focus)
+function updateCoverageDisplay() {
+  var reasonList = answers.reasonList || [];
+  var totalLoss = 0;
+  reasonList.forEach(function(item) {
+    var cat = findCategory(item.reason);
+    if (cat) {
+      totalLoss += cat.calcHours(item.data || {});
+    }
+  });
+  var totalEls = document.querySelectorAll('.loss-total');
+  totalEls.forEach(function(el) { el.innerHTML = '损失工时合计：<strong>'+totalLoss.toFixed(1)+'</strong> 小时'; });
+  // Update coverage bar if in 人时产值 mode
+  if (!isActualPHBelowPlanned()) return;
+  var lossGap = calcLossGap();
+  var cov = getCoveragePct();
+  var covColor = cov >= 90 ? '#10B981' : cov >= 60 ? '#F59E0B' : '#EF4444';
+  var barFills = document.querySelectorAll('.coverage-bar-fill');
+  barFills.forEach(function(el) { el.style.width = Math.min(cov,100)+'%'; el.style.background = covColor; });
+  var covTexts = document.querySelectorAll('.coverage-text');
+  covTexts.forEach(function(el) { el.innerHTML = '<span style="font-size:13px;color:#6B7280">已分析覆盖率</span><span style="font-size:13px;font-weight:700;color:'+covColor+'">'+totalLoss.toFixed(1)+' / '+lossGap.toFixed(1)+' 小时 ('+cov.toFixed(0)+'%)</span>'; });
+  // Update validation message
+  var msgEl = document.getElementById("validation-msg");
+  if (msgEl) {
+    var _canGo = canProceed();
+    if (_canGo) {
+      msgEl.style.display = "none";
+    } else {
+      var _incomplete = [];
+      reasonList.forEach(function(item) {
+        var cat = findCategory(item.reason);
+        if (!cat) return;
+        var rd = item.data || {};
+        var missing = [];
+        cat.fields.forEach(function(f) {
+          var val = rd[f];
+          if (f === 'productModel') { if (val === undefined || (typeof val === 'string' && val.trim() === "")) missing.push(cat.fieldLabels[f]); }
+          else { if (val === undefined || val === "" || Number(val) <= 0) missing.push(cat.fieldLabels[f]); }
+        });
+        var note = item.note;
+        if (note === undefined || (typeof note === 'string' && note.trim() === "")) missing.push("备注说明");
+        if (missing.length > 0) _incomplete.push({ reason: item.reason, missing: missing });
+      });
+      if (_incomplete.length > 0) {
+        var msg = '<div style="font-weight:600;margin-bottom:4px">以下原因信息不完整：</div>';
+        _incomplete.forEach(function(item) { msg += '<div style="margin-top:2px">• '+item.reason+'：还需填写 '+item.missing.join('、')+'</div>'; });
+        msgEl.innerHTML = msg;
+      } else if (isActualPHBelowPlanned() && getCoveragePct() < 90) {
+        msgEl.innerHTML = '覆盖率需达到 90% 才能继续，当前 '+getCoveragePct().toFixed(0)+'%，请点击下方"添加更多损失原因"补充分析';
+      }
+      msgEl.style.display = "";
+    }
+  }
+}
+
+function canProceed() {
+  var visibleQs = getVisibleQuestions();
+  if (currentStep < visibleQs.length) {
+    const val = answers[visibleQs[currentStep].id];
+    return val !== undefined && val !== "";
+  }
+  if (currentStep === visibleQs.length) return true; // PH/DLE analysis always proceeds
+  if (currentStep === visibleQs.length + 1) return true; // reason selection always proceeds
+  if (currentStep === visibleQs.length + 2) {
+    var reasonList = answers.reasonList || [];
+    if (reasonList.length === 0) return true; // no reasons to validate
+    var allFilled = reasonList.every(function(item) {
+      var cat = findCategory(item.reason);
+      if (!cat) return false;
+      var rd = item.data || {};
+      var fieldsOk = cat.fields.every(function(f) {
+        var val = rd[f];
+        if (f === 'productModel') return val !== undefined && val.trim() !== "";
+        return val !== undefined && val !== "" && Number(val) > 0;
+      });
+      var note = item.note;
+      var noteOk = note !== undefined && note.trim() !== "";
+      return fieldsOk && noteOk;
+    });
+    if (!allFilled) return false;
+    return true;
+  }
+  if (currentStep === visibleQs.length + 3) {
+    return getCoveragePct() >= 90;
+  }
+  return true;
+}
+
+function goNext() {
+  var visibleQs = getVisibleQuestions();
+  if (currentStep < visibleQs.length) {
+    const q = visibleQs[currentStep];
+    const input = document.getElementById("current-input");
+    if (input && input.value !== "") {
+      if (q.inputType === "number") {
+        answers[q.id] = Number(input.value);
+      } else {
+        answers[q.id] = input.value.trim();
+      }
+    }
+  }
+  if (currentStep === visibleQs.length) {
+    // PH/DLE analysis step - branch based on comparison
+    if (isDLEMode()) {
+      if (calcDLE() < getDLEThreshold()) {
+        currentStep = visibleQs.length + 1; // go to reason selection
+      } else {
+        currentStep = visibleQs.length + 4; // skip to completion
+      }
+    } else {
+      if (isActualPHBelowPlanned()) {
+        currentStep = visibleQs.length + 1; // go to reason selection
+      } else {
+        currentStep = visibleQs.length + 4; // skip to completion
+      }
+    }
+  } else if (currentStep === visibleQs.length + 1) {
+    // Reason selection step - batch add all selected reasons
+    if (isAddingMore) {
+      isAddingMore = false;
+      currentStep = visibleQs.length + 2; // go back to reason details
+    } else {
+      // Add all selected reasons to reasonList
+      if (selectedReasons.size > 0) {
+        if (!answers.reasonList) answers.reasonList = [];
+        selectedReasons.forEach(function(r) {
+          answers.reasonList.push({ id: genReasonId(), reason: r, data: {}, note: "" });
+        });
+        selectedReasons.clear();
+      }
+      var reasonList = answers.reasonList || [];
+      if (reasonList.length === 0) {
+        currentStep = visibleQs.length + 4; // skip to completion (no reasons)
+      } else {
+        currentStep++;
+      }
+    }
+  } else if (currentStep === visibleQs.length + 2) {
+    // Reason details step - save form values before navigating away
+    saveReasonFieldValues();
+    if ((isDLEMode() ? calcDLE() < getDLEThreshold() : isActualPHBelowPlanned()) && getCoveragePct() < 90) {
+      currentStep = visibleQs.length + 3; // go to more analysis
+    } else {
+      currentStep = visibleQs.length + 4; // go to completion
+    }
+  } else {
+    currentStep++;
+  }
+  renderInterview();
+}
+
+function goPrev() {
+  var visibleQs = getVisibleQuestions();
+  if (currentStep > 0) {
+    // Save form values if we're on the reason details step
+    if (currentStep === visibleQs.length + 2) {
+      saveReasonFieldValues();
+    }
+    currentStep--;
+    renderInterview();
+  }
+}
+
+function submitInterview() {
+  var reasonList = answers.reasonList || [];
+  var isDLE = isDLEMode();
+  // Convert reasonList to abnormalReasons array format for storage
+  var abnormalReasons = reasonList.map(function(item) {
+    var cat = findCategory(item.reason);
+    var hours = cat ? cat.calcHours(item.data || {}) : 0;
+    return { reason: item.reason, hours: hours, note: item.note || "", data: item.data || {} };
+  });
+  var totalLoss = getTotalLossHours();
+
+  var record;
+  if (isDLE) {
+    // DLE mode record
+    var dle = calcDLE();
+    var eh = Number(answers.effectiveHours) || 0;
+    var ah = Number(answers.actualHours) || 0;
+    // For DLE mode, lossGap = actual - effective (the gap to analyze)
+    var dleLossGap = ah - eh;
+    var coverage = dleLossGap > 0 ? (totalLoss / dleLossGap) * 100 : 100;
+    record = {
+      id: Date.now(),
+      submitTime: new Date().toLocaleString("zh-CN", { year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:false }),
+      teamName: answers.teamName,
+      date: answers.date,
+      targetValue: 0,
+      actualValue: 0,
+      standardHours: 0,
+      actualHours: ah,
+      effectiveHours: eh,
+      attendanceHours: 0,
+      dle: dle,
+      abnormalReasons: abnormalReasons,
+      plannedPH: 0,
+      actualPH: 0,
+      hoursGap: 0,
+      lossGap: dleLossGap,
+      totalLossAnalyzed: totalLoss,
+      coverage: coverage,
+      isDLE: true,
+    };
+  } else {
+    // Normal mode record
+    var plannedPH = calcPlannedPH();
+    var actualPH = calcActualPH();
+    var hoursGap = calcHoursGapSimple();
+    var lossGap = calcLossGap();
+    var coverage = getCoveragePct();
+    record = {
+      id: Date.now(),
+      submitTime: new Date().toLocaleString("zh-CN", { year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:false }),
+      teamName: answers.teamName,
+      date: answers.date,
+      targetValue: Number(answers.targetValue),
+      actualValue: Number(answers.actualValue),
+      standardHours: Number(answers.standardHours),
+      actualHours: Number(answers.actualHours),
+      abnormalReasons: abnormalReasons,
+      plannedPH: plannedPH,
+      actualPH: actualPH,
+      hoursGap: hoursGap,
+      lossGap: lossGap,
+      totalLossAnalyzed: totalLoss,
+      coverage: coverage,
+      isDLE: false,
+    };
+  }
+  records.push(record);
+  saveRecords();
+  sendDingTalkNotification(record);
+  uploadRecordToCloud(record);
+  showDashboard();
+
+  // Show warning after submission in preview mode
+  if (isPreviewMode) {
+    setTimeout(function() {
+      var toast = document.createElement('div');
+      toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#FEF2F2;border:2px solid #EF4444;border-radius:12px;padding:14px 24px;z-index:10000;max-width:500px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,0.15);font-size:13px;color:#991B1B;line-height:1.6;';
+      toast.innerHTML = '<div style="font-weight:700;margin-bottom:6px;">⚠️ 数据已提交，但刷新页面后会丢失！</div>' +
+        '<div>建议立即备份数据，然后在其他浏览器中恢复。</div>' +
+        '<div style="margin-top:10px;display:flex;gap:8px;justify-content:center;">' +
+        '<button onclick="backupData();this.parentElement.parentElement.remove()" style="padding:6px 16px;border-radius:6px;border:none;background:#059669;color:#fff;font-size:12px;font-weight:600;cursor:pointer;">立即备份</button>' +
+        '<button onclick="this.parentElement.parentElement.remove()" style="padding:6px 16px;border-radius:6px;border:1px solid #EF4444;background:#fff;color:#EF4444;font-size:12px;font-weight:600;cursor:pointer;">稍后处理</button>' +
+        '</div>';
+      document.body.appendChild(toast);
+    }, 300);
+  }
+}
+
+// ==================== DOWNLOAD FILE ====================
+function downloadFile() {
+  try {
+    // Get the current page's HTML content
+    var html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+    var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'team-interview-bot.html';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function() {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 100);
+  } catch(e) {
+    // If Blob/download fails (e.g. in some sandboxed environments), show manual instructions
+    alert('自动下载失败，请右键点击页面，选择"另存为"，保存为 HTML 文件，然后在本地用浏览器打开。');
+  }
+}
+
+// ==================== DATA BACKUP / RESTORE ====================
+function backupData() {
+  if (records.length === 0) {
+    alert("暂无数据可备份");
+    return;
+  }
+  try {
+    var json = JSON.stringify(records, null, 2);
+    var blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    var now = new Date();
+    var dateStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+    a.href = url;
+    a.download = 'interview-data-' + dateStr + '.json';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function() {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 100);
+  } catch(e) {
+    // Fallback: show JSON in a modal for manual copy
+    var json = JSON.stringify(records, null, 2);
+    showExportModal(json);
+  }
+}
+
+function restoreData() {
+  // Create a hidden file input for the user to pick a JSON file
+  var input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json,application/json';
+  input.style.display = 'none';
+  input.onchange = function(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      try {
+        var data = JSON.parse(ev.target.result);
+        if (!Array.isArray(data)) {
+          alert("文件格式不正确，请选择之前备份的 JSON 文件。");
+          return;
+        }
+        // Merge: add records that don't already exist (by id), update existing ones
+        var existingIds = {};
+        records.forEach(function(r) { existingIds[r.id] = true; });
+        var added = 0, updated = 0;
+        data.forEach(function(r) {
+          if (existingIds[r.id]) {
+            // Update existing record
+            for (var i = 0; i < records.length; i++) {
+              if (records[i].id === r.id) {
+                records[i] = r;
+                updated++;
+                break;
+              }
+            }
+          } else {
+            records.push(r);
+            added++;
+          }
+        });
+        saveRecords();
+        showDashboard();
+        var msg = "数据恢复成功！";
+        if (added > 0) msg += " 新增 " + added + " 条记录。";
+        if (updated > 0) msg += " 更新 " + updated + " 条记录。";
+        alert(msg);
+      } catch(err) {
+        alert("文件解析失败，请确认是有效的 JSON 备份文件。\n错误：" + err.message);
+      }
+    };
+    reader.readAsText(file);
+  };
+  document.body.appendChild(input);
+  input.click();
+  setTimeout(function() { document.body.removeChild(input); }, 5000);
+}
+
+// ==================== EXPORT ====================
+function exportData() {
+  // Always use cloud data
+  if (cloudDashboardRecords.length === 0) {
+    alert("暂无数据可导出");
+    return;
+  }
+  var BOM = "\uFEFF";
+  var headers = ["班组","提交时间","日期","分析模式","目标产值(万元)","实际产值(万元)","达成率/DLE(%)","计划工时/有效工时(h)","实际工时(h)","偏差(h)","损失工时(h)","差距覆盖(%)","产值状态","效率状态","异常原因"];
+  var rows = cloudDashboardRecords.map(function(r) {
+    var lossHours = (r.abnormalReasons || []).reduce(function(s, a) { return s + a.hours; }, 0);
+    var reasons = (r.abnormalReasons || []).map(function(a) { return a.reason + "(" + a.hours.toFixed(1) + "h)" + (a.note ? ":" + a.note : ""); }).join("；");
+
+    if (r.isDLE) {
+      // DLE mode record
+      var dle = r.dle || 0;
+      var dlePct = (dle * 100).toFixed(1);
+      var eh = r.effectiveHours || 0;
+      var ah = r.actualHours || 0;
+      var rLossGap = r.lossGap || (ah - eh);
+      var coverage = r.coverage != null ? r.coverage : (rLossGap > 0 ? (lossHours / rLossGap) * 100 : 100);
+      var dleThr = (r.teamName === "二部二课") ? 0.80 : 0.75;
+      var effStatus = dle < dleThr ? "DLE需分析" : "DLE正常";
+      return [
+        r.teamName || "",
+        r.submitTime || "",
+        r.date || "",
+        "DLE分析",
+        "",
+        "",
+        dlePct,
+        eh,
+        ah,
+        "",
+        lossHours.toFixed(1),
+        coverage.toFixed(0),
+        "—",
+        effStatus,
+        reasons
+      ];
+    } else {
+      // Normal mode record
+      var compRate = pctNum(r.actualValue, r.targetValue);
+      var hourDev = r.actualHours - r.standardHours;
+      var coverage = r.coverage != null ? r.coverage : (lossHours > 0 ? 100 : 0);
+      var isLowTarget = (r.targetValue || 0) < 1;
+      var outputStatus = isLowTarget ? "—" : (compRate >= 100 ? "超额完成" : compRate >= 90 ? "基本达标" : compRate >= 80 ? "轻度未达标" : "严重未达标");
+      var plannedPH = r.standardHours > 0 ? r.targetValue * 10000 / r.standardHours : 0;
+      var actualPH = r.actualHours > 0 ? r.actualValue * 10000 / r.actualHours : 0;
+      var efficiencyStatus = isLowTarget ? (hourDev > 0 ? "需分析" : hourDev === 0 ? "工时持平" : "正常") : (actualPH >= plannedPH ? "达标" : "未达标");
+      return [
+        r.teamName || "",
+        r.submitTime || "",
+        r.date || "",
+        "人时产值分析",
+        r.targetValue != null ? r.targetValue : "",
+        r.actualValue != null ? r.actualValue : "",
+        compRate.toFixed(1),
+        r.standardHours != null ? r.standardHours : "",
+        r.actualHours != null ? r.actualHours : "",
+        hourDev,
+        lossHours.toFixed(1),
+        coverage.toFixed(0),
+        outputStatus,
+        efficiencyStatus,
+        reasons
+      ];
+    }
+  });
+  var csv = BOM + headers.join(",") + "\n" + rows.map(function(row) {
+    return row.map(function(cell) {
+      var s = String(cell);
+      if (s.indexOf(",") >= 0 || s.indexOf('"') >= 0 || s.indexOf("\n") >= 0) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    }).join(",");
+  }).join("\n");
+  showExportModal(csv);
+}
+function showExportModal(csv) {
+  // Remove existing modal if any
+  var existing = document.getElementById("export-modal");
+  if (existing) existing.remove();
+  var modal = document.createElement("div");
+  modal.id = "export-modal";
+  modal.style.cssText = "position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;";
+  modal.innerHTML = '<div style="background:#fff;border-radius:16px;padding:28px;max-width:640px;width:90%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3);">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
+    '<h3 style="margin:0;font-size:18px;color:#111827;">导出数据</h3>' +
+    '<button id="export-modal-close" style="background:none;border:none;font-size:22px;cursor:pointer;color:#6B7280;padding:4px 8px;">&times;</button></div>' +
+    '<p style="font-size:13px;color:#6B7280;margin:0 0 12px 0;">请复制以下内容，粘贴到文本编辑器中保存为 .csv 文件，即可用 Excel 打开。</p>' +
+    '<textarea id="export-csv-text" readonly style="width:100%;flex:1;min-height:300px;border:1.5px solid #D1D5DB;border-radius:10px;padding:12px;font-family:monospace;font-size:12px;color:#374151;resize:vertical;outline:none;">' + csv.replace(/</g, '&lt;') + '</textarea>' +
+    '<div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end;">' +
+    '<button id="export-copy-btn" style="padding:10px 24px;border-radius:10px;border:none;background:linear-gradient(135deg,#059669,#10B981);color:#fff;font-size:14px;font-weight:600;cursor:pointer;">复制全部内容</button>' +
+    '</div></div>';
+  document.body.appendChild(modal);
+  document.getElementById("export-modal-close").onclick = function() { modal.remove(); };
+  modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+  document.getElementById("export-copy-btn").onclick = function() {
+    var ta = document.getElementById("export-csv-text");
+    var btn = this;
+    // Try Clipboard API first
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(csv).then(function() {
+        btn.textContent = "已复制！";
+        btn.style.background = "#10B981";
+        setTimeout(function() { modal.remove(); }, 800);
+      }).catch(function() {
+        // Fallback to execCommand
+        ta.select();
+        try { document.execCommand("copy"); btn.textContent = "已复制！"; btn.style.background = "#10B981"; setTimeout(function() { modal.remove(); }, 800); }
+        catch(e) { ta.focus(); btn.textContent = "请手动全选复制"; }
+      });
+    } else {
+      ta.select();
+      try { document.execCommand("copy"); btn.textContent = "已复制！"; btn.style.background = "#10B981"; setTimeout(function() { modal.remove(); }, 800); }
+      catch(e) { ta.focus(); btn.textContent = "请手动全选复制"; }
+    }
+  };
+}
+
+// ==================== DASHBOARD RENDER ====================
+function renderDashboard() {
+  // Always use cloud data
+  const displayData = aggregateRecords(cloudDashboardRecords, dashboardTimeFilter);
+  // Custom team sort order
+  var teamSortOrder = ["一部一课","一部二课","一部三课","二部三课","二部一课","二部二课","二部四课","二部五课"];
+  displayData.sort(function(a, b) {
+    var ai = teamSortOrder.indexOf(a.teamName || a.label);
+    var bi = teamSortOrder.indexOf(b.teamName || b.label);
+    if (ai < 0) ai = teamSortOrder.length;
+    if (bi < 0) bi = teamSortOrder.length;
+    if (ai !== bi) return ai - bi;
+    return (a.date || "").localeCompare(b.date || "");
+  });
+  // Build date range description
+  var dateRangeText = "";
+  if (dashboardDateFilter) {
+    // Show the user-selected date filter
+    if (dashboardTimeFilter === "day") {
+      dateRangeText = formatDateShort(dashboardDateFilter);
+    } else if (dashboardTimeFilter === "week") {
+      dateRangeText = getWeekDateRange(dashboardDateFilter);
+    } else {
+      dateRangeText = getMonthLabel(dashboardDateFilter);
+    }
+  } else if (dashboardTimeFilter === "day") {
+    var dates = displayData.map(function(r){ return r.date; }).sort();
+    var uniqueDates = [];
+    dates.forEach(function(d){ if(uniqueDates.indexOf(d)<0) uniqueDates.push(d); });
+    if (uniqueDates.length === 1) {
+      dateRangeText = formatDateShort(uniqueDates[0]);
+    } else if (uniqueDates.length > 1) {
+      dateRangeText = formatDateShort(uniqueDates[0]) + " - " + formatDateShort(uniqueDates[uniqueDates.length-1]);
+    }
+  } else if (dashboardTimeFilter === "week") {
+    var weekKeys = [];
+    displayData.forEach(function(r) {
+      var raw = r.key || "";
+      var k = raw.indexOf("|") >= 0 ? raw.split("|").pop() : raw;
+      if (!k) k = getISOWeek(r.date);
+      if (k && k.indexOf("-W") >= 0 && weekKeys.indexOf(k) < 0) weekKeys.push(k);
+    });
+    weekKeys.sort();
+    if (weekKeys.length === 1) {
+      dateRangeText = getWeekDateRange(weekKeys[0]);
+    } else if (weekKeys.length > 1) {
+      dateRangeText = getWeekDateRange(weekKeys[0]) + " 共" + weekKeys.length + "周";
+    }
+  } else {
+    var monthKeys = [];
+    displayData.forEach(function(r) {
+      var raw = r.key || "";
+      var k = raw.indexOf("|") >= 0 ? raw.split("|").pop() : raw;
+      if (!k) k = getMonthKey(r.date);
+      if (k && /^\d{4}-\d{2}$/.test(k) && monthKeys.indexOf(k) < 0) monthKeys.push(k);
+    });
+    monthKeys.sort();
+    if (monthKeys.length === 1) {
+      dateRangeText = getMonthLabel(monthKeys[0]);
+    } else if (monthKeys.length > 1) {
+      dateRangeText = getMonthLabel(monthKeys[0]) + " - " + getMonthLabel(monthKeys[monthKeys.length-1]);
+    }
+  }
+  var unitText = dashboardTimeFilter === "day" ? "条记录" : "个班组";
+  var subText = "共 " + displayData.length + " " + unitText;
+  if (dateRangeText) subText += " · " + dateRangeText;
+  document.getElementById("dashboard-sub").textContent = subText;
+  const content = document.getElementById("dashboard-content");
+
+  const n = displayData.length;
+  // For average completion rate, exclude lowTarget records (targetValue < 1万) and DLE records
+  const normalRecords = displayData.filter(r => !r.isDLE && (r.targetValue || 0) >= 1);
+  const avgCompletion = normalRecords.length > 0 ? normalRecords.reduce((s, r) => s + pctNum(r.actualValue, r.targetValue), 0) / normalRecords.length : 0;
+  const totalLoss = displayData.reduce((s, r) => s + r.abnormalReasons.reduce((ss, a) => ss + a.hours, 0), 0);
+  // Exclude DLE records from production value totals (they have no 产值 data)
+  const nonDLERecords = displayData.filter(r => !r.isDLE);
+  const totalStandard = nonDLERecords.reduce((s, r) => s + r.standardHours, 0);
+  const totalActual = displayData.reduce((s, r) => s + r.actualHours, 0);
+  const totalTarget = nonDLERecords.reduce((s, r) => s + r.targetValue, 0);
+  const totalActualVal = nonDLERecords.reduce((s, r) => s + r.actualValue, 0);
+
+  const reasonAgg = {};
+  displayData.forEach(r => r.abnormalReasons.forEach(a => { reasonAgg[a.reason] = (reasonAgg[a.reason]||0) + a.hours; }));
+  const reasonPie = Object.entries(reasonAgg).map(([name, value]) => ({ name, value }));
+
+  let html = '';
+
+  // KPI Cards
+  html += '<div class="kpi-grid">';
+  html += '<div class="kpi-card"><div class="kpi-header"><div class="kpi-icon" style="background:#EEF2FF"><svg viewBox="0 0 24 24" fill="none" stroke="#4F46E5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><span class="kpi-label">'+(dashboardTimeFilter === "day" ? "班组数量" : "时段数量")+'</span></div><div class="kpi-value">'+n+'</div></div>';
+  html += '<div class="kpi-card"><div class="kpi-header"><div class="kpi-icon" style="background:#ECFDF5"><svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><span class="kpi-label">平均达成率</span></div><div class="kpi-value" style="color:'+getCompletionColor(avgCompletion)+'">'+avgCompletion.toFixed(1)+'%</div></div>';
+  html += '<div class="kpi-card"><div class="kpi-header"><div class="kpi-icon" style="background:#EFF6FF"><svg viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div><span class="kpi-label">总产值/目标(万元)</span></div><div class="kpi-value" style="font-size:16px">'+fmtW(totalActualVal)+'</div><div class="kpi-sub">目标 '+fmtW(totalTarget)+'</div></div>';
+  html += '<div class="kpi-card"><div class="kpi-header"><div class="kpi-icon" style="background:#FEF2F2"><svg viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><span class="kpi-label">总损失工时</span></div><div class="kpi-value" style="color:'+(totalLoss>0?"#EF4444":"#10B981")+'">'+totalLoss.toFixed(1)+'</div><div class="kpi-sub">实际总工时 '+totalActual+'h / 标准 '+totalStandard+'h</div></div>';
+  html += '</div>';
+
+  // Charts Row 1
+  html += '<div class="chart-grid">';
+  html += '<div class="chart-card"><h3>产值目标 vs 实际完成</h3><div class="chart-container"><canvas id="chart-production"></canvas></div></div>';
+  html += '<div class="chart-card"><h3>工时对比分析</h3><div class="chart-container"><canvas id="chart-hours"></canvas></div></div>';
+  html += '</div>';
+
+  // Charts Row 2
+  html += '<div class="chart-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">';
+  html += '<div class="chart-card"><h3>各'+(dashboardTimeFilter === "day" ? "班组" : "时段")+'达成率</h3><div class="chart-container"><canvas id="chart-completion"></canvas></div></div>';
+  html += '<div class="chart-card"><h3>异常原因分布</h3><div class="chart-container"><canvas id="chart-reasons"></canvas></div></div>';
+  html += '</div>';
+
+  // Data Table
+  const tableTitle = '云端数据明细';
+  var isDayView = dashboardTimeFilter === "day";
+  var dateColHeader = isDayView ? '<th>日期</th>' : '';
+  var recordLabel = isDayView ? displayData.length + ' 条记录' : displayData.length + ' 个班组';
+  var exportBtn = '<button class="btn-export" data-action="exportData" style="margin-left:auto;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>导出明细数据</button>';
+  html += '<div class="table-card"><div class="table-header" style="display:flex;align-items:center;"><h3>'+tableTitle+'</h3><span style="margin-left:8px;">'+recordLabel+'</span>'+exportBtn+'</div><div class="table-wrap"><table><thead><tr><th>班组</th><th>提交时间</th>'+dateColHeader+'<th>目标产值(万元)</th><th>实际产值(万元)</th><th>达成率</th><th>计划人时产值</th><th>实际人时产值</th><th>计划工时</th><th>实际工时</th><th>偏差</th><th>损失工时</th><th>差距覆盖</th><th>产值状态</th><th>效率状态</th><th></th></tr></thead><tbody>';
+  displayData.forEach(r => {
+    const lossHours = r.abnormalReasons.reduce((s, a) => s + a.hours, 0);
+    const expanded = showDetailId === r.id;
+    const displayName = r.label || r.teamName;
+    var dateCell = isDayView ? '<td style="color:#6B7280;white-space:nowrap">'+r.date+'</td>' : '';
+    var submitTimeCell = '<td style="color:#6B7280;font-size:12px;white-space:nowrap">'+(r.submitTime||'—')+'</td>';
+    var detailColspan = isDayView ? 16 : 15;
+    var rowHtml = '';
+
+    if (r.isDLE) {
+      // DLE mode record
+      var dle = r.dle || 0;
+      var dlePct = (dle * 100).toFixed(1);
+      var dleThr = (r.teamName === "二部二课") ? 0.80 : 0.75;
+      var dleColor = dle < dleThr ? '#EF4444' : '#10B981';
+      var eh = r.effectiveHours || 0;
+      var ah = r.actualHours || 0;
+      var rLossGap = r.lossGap || (ah - eh);
+      var rCoverage = r.coverage != null ? r.coverage : (rLossGap > 0 ? (lossHours / rLossGap) * 100 : 100);
+      var covColor = rCoverage >= 90 ? '#10B981' : rCoverage >= 60 ? '#F59E0B' : '#EF4444';
+      var effStatusBadge;
+      if (dle < dleThr) {
+        effStatusBadge = '<td><span class="status-badge" style="background:#FEF2F2;color:#DC2626">DLE需分析</span></td>';
+      } else {
+        effStatusBadge = '<td><span class="status-badge" style="background:#ECFDF5;color:#059669">DLE正常</span></td>';
+      }
+      rowHtml += '<td style="font-weight:600;color:#111827">'+displayName+'</td>'+submitTimeCell+dateCell;
+      rowHtml += '<td style="color:#9CA3AF;font-weight:600">—</td>'; // 目标产值
+      rowHtml += '<td style="color:#9CA3AF;font-weight:600">—</td>'; // 实际产值
+      rowHtml += '<td style="font-weight:600;color:'+dleColor+'">'+dlePct+'%</td>'; // 达成率 → DLE
+      rowHtml += '<td style="color:#9CA3AF;font-weight:600">—</td>'; // 计划人时产值
+      rowHtml += '<td style="color:#9CA3AF;font-weight:600">—</td>'; // 实际人时产值
+      rowHtml += '<td style="color:#6B7280">'+eh+'h</td>'; // 有效工时
+      rowHtml += '<td style="color:#374151">'+ah+'h</td>'; // 实际工时
+      rowHtml += '<td style="color:#9CA3AF;font-weight:600">—</td>'; // 偏差
+      rowHtml += '<td style="font-weight:600;color:'+(lossHours>0?"#EF4444":"#10B981")+'">'+lossHours.toFixed(1)+'h</td>'; // 损失工时
+      rowHtml += '<td style="font-weight:600;color:'+covColor+'">'+rCoverage.toFixed(0)+'%</td>'; // 差距覆盖
+      rowHtml += '<td style="color:#9CA3AF;font-weight:600">—</td>'; // 产值状态
+      rowHtml += effStatusBadge; // 效率状态 → DLE状态
+    } else {
+      // Normal mode record
+      const compRate = pctNum(r.actualValue, r.targetValue);
+      const hourDev = r.actualHours - r.standardHours;
+      const rPlannedPH = r.plannedPH != null ? r.plannedPH : (r.standardHours > 0 ? r.targetValue * 10000 / r.standardHours : 0);
+      const rActualPH = r.actualPH != null ? r.actualPH : (r.actualHours > 0 ? r.actualValue * 10000 / r.actualHours : 0);
+      const rHoursGap = r.hoursGap != null ? r.hoursGap : (function(){ var tv=r.targetValue||0,av=r.actualValue||0,sh=r.standardHours||0,ah=r.actualHours||0; if(tv<=0||sh<=0||ah<=0)return 0; if(tv<1)return ah-sh; return ah - sh*av/tv; })();
+      const rLossGap = r.lossGap != null ? r.lossGap : (rHoursGap > 0 ? rHoursGap * 0.9 : 0);
+      const rCoverage = r.coverage != null ? r.coverage : (rLossGap > 0 ? (lossHours / rLossGap) * 100 : 100);
+      const phColor = rActualPH >= rPlannedPH ? '#10B981' : '#EF4444';
+      const covColor = rCoverage >= 90 ? '#10B981' : rCoverage >= 60 ? '#F59E0B' : '#EF4444';
+      var isLowTarget = r.lowTarget || (r.targetValue || 0) < 1;
+      var compRateCell, outputStatusBadge, efficiencyStatusBadge, devDisplay;
+      if (isLowTarget) {
+        compRateCell = '<td style="color:#9CA3AF;font-weight:600">—</td>';
+        outputStatusBadge = '<td style="color:#9CA3AF;font-weight:600">—</td>';
+        devDisplay = '<td style="color:'+(hourDev>0?"#EF4444":hourDev<0?"#10B981":"#6B7280")+';font-weight:600">'+(hourDev>0?"+":"")+hourDev+'h</td>';
+        if (hourDev > 0) {
+          efficiencyStatusBadge = '<td><span class="status-badge" style="background:#FEF2F2;color:#DC2626">需分析</span></td>';
+        } else if (hourDev === 0) {
+          efficiencyStatusBadge = '<td><span class="status-badge" style="background:#EEF2FF;color:#4F46E5">工时持平</span></td>';
+        } else {
+          efficiencyStatusBadge = '<td><span class="status-badge" style="background:#ECFDF5;color:#059669">正常</span></td>';
+        }
+      } else {
+        compRateCell = '<td style="font-weight:600;color:'+getCompletionColor(compRate)+'">'+compRate.toFixed(1)+'%</td>';
+        outputStatusBadge = '<td><span class="status-badge" style="background:'+(compRate>=100?"#ECFDF5":compRate>=90?"#EEF2FF":compRate>=80?"#FEF3C7":"#FEF2F2")+';color:'+(compRate>=100?"#059669":compRate>=90?"#4F46E5":compRate>=80?"#D97706":"#DC2626")+'">'+getCompletionLabel(compRate)+'</span></td>';
+        devDisplay = '<td style="color:'+(hourDev>0?"#EF4444":hourDev<0?"#10B981":"#6B7280")+'">'+(hourDev>0?"+":"")+hourDev+'h</td>';
+        if (rActualPH >= rPlannedPH) {
+          efficiencyStatusBadge = '<td><span class="status-badge" style="background:#ECFDF5;color:#059669">达标</span></td>';
+        } else {
+          efficiencyStatusBadge = '<td><span class="status-badge" style="background:#FEF2F2;color:#DC2626">未达标</span></td>';
+        }
+      }
+      var covCell = isLowTarget ? '<td style="color:#9CA3AF">—</td>' : '<td style="font-weight:600;color:'+covColor+'">'+rCoverage.toFixed(0)+'%</td>';
+      rowHtml += '<td style="font-weight:600;color:#111827">'+displayName+'</td>'+submitTimeCell+dateCell+'<td style="color:#374151">'+fmtW(r.targetValue)+'</td><td style="font-weight:500;color:#111827">'+fmtW(r.actualValue)+'</td>'+compRateCell+'<td style="color:#4F46E5;font-weight:600">'+fmtPH(rPlannedPH)+'</td><td style="color:'+phColor+';font-weight:600">'+fmtPH(rActualPH)+'</td><td style="color:#6B7280">'+r.standardHours+'h</td><td style="color:#374151">'+r.actualHours+'h</td>'+devDisplay+'<td style="font-weight:600;color:'+(lossHours>0?"#EF4444":"#10B981")+'">'+lossHours.toFixed(1)+'h</td>'+covCell+outputStatusBadge+efficiencyStatusBadge;
+    }
+    rowHtml += '<td>'+(r.abnormalReasons.length>0?'<button class="btn-detail" data-action="toggleDetail" data-param="'+r.id+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> '+(expanded?"收起":"详情")+'</button>':'')+'</td>';
+    html += '<tr>'+rowHtml+'</tr>';
+    if (expanded && r.abnormalReasons.length > 0) {
+      html += '<tr class="detail-row"><td colspan="'+detailColspan+'"><div class="detail-content"><div class="detail-content-title">异常原因明细</div><div class="detail-reasons">';
+      r.abnormalReasons.forEach(a => {
+        const color = REASON_COLORS[a.reason] || "#6B7280";
+        html += '<div class="detail-reason-tag" style="background:'+color+'10;border-color:'+color+'30;flex-direction:column;align-items:flex-start;gap:4px;padding:8px 12px">';
+        html += '<div style="display:flex;align-items:center;gap:6px">'+getReasonIcon(a.reason).replace('stroke="currentColor"','stroke="'+color+'"')+'<span class="detail-reason-name">'+a.reason+'</span><span class="detail-reason-hours" style="color:'+color+'">'+a.hours.toFixed(1)+'h</span></div>';
+        // Show data breakdown if available
+        if (a.data && Object.keys(a.data).length > 0) {
+          var breakdownParts = [];
+          if (a.data.downtimeHours !== undefined) breakdownParts.push('停机'+a.data.downtimeHours+'h × '+a.data.affectedPeople+'人');
+          if (a.data.hoursPerPerson !== undefined) breakdownParts.push((a.data.productModel||'')+' '+a.data.affectedPeople+'人×'+a.data.hoursPerPerson+'h');
+          if (a.data.impactHours !== undefined) breakdownParts.push(a.data.impactHours+'h × '+(a.data.affectedPeople||0)+'人');
+          if (breakdownParts.length > 0) {
+            html += '<div style="font-size:11px;color:#6B7280">'+breakdownParts.join(' | ')+'</div>';
+          }
+        }
+        if (a.note) { html += '<div style="font-size:12px;color:#6B7280;line-height:1.4;border-top:1px solid '+color+'20;padding-top:4px;width:100%">'+a.note+'</div>'; }
+        html += '</div>';
+      });
+      html += '</div></div></td></tr>';
+    }
+  });
+  html += '</tbody></table></div></div>';
+
+  content.innerHTML = html;
+
+  // Draw charts after DOM update
+  setTimeout(() => {
+    // Filter out DLE records from production/completion charts (they have no 产值 data)
+    var chartDataNormal = displayData.filter(function(r) { return !r.isDLE; });
+    drawProductionChart(chartDataNormal);
+    drawHoursChart(displayData); // Hours chart includes all records
+    drawCompletionChart(chartDataNormal);
+    drawReasonsChart(reasonPie);
+  }, 50);
+}
+
+function toggleDetail(id) {
+  showDetailId = showDetailId === id ? null : id;
+  renderDashboard();
+}
+
+// ==================== CHART DRAWING ====================
+function drawProductionChart(data) {
+  const canvas = document.getElementById("chart-production");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width * 2;
+  canvas.height = rect.height * 2;
+  ctx.scale(2, 2);
+  const w = rect.width;
+  const h = rect.height;
+
+  const padding = { top: 36, right: 20, bottom: 40, left: 60 };
+  const chartW = w - padding.left - padding.right;
+  const chartH = h - padding.top - padding.bottom;
+
+  const maxVal = Math.max(...data.map(r => Math.max(r.targetValue, r.actualValue))) * 1.15;
+  const barWidth = chartW / data.length / 3;
+  const groupWidth = chartW / data.length;
+
+  // Grid lines
+  ctx.strokeStyle = "#F3F4F6";
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = padding.top + (chartH / 4) * i;
+    ctx.beginPath();
+    ctx.moveTo(padding.left, y);
+    ctx.lineTo(w - padding.right, y);
+    ctx.stroke();
+    ctx.fillStyle = "#6B7280";
+    ctx.font = "11px sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(((maxVal / 4) * (4 - i)).toFixed(1) + "万", padding.left - 8, y + 4);
+  }
+
+  // Bars
+  data.forEach((r, i) => {
+    const x = padding.left + groupWidth * i + groupWidth / 2;
+    const targetH = (r.targetValue / maxVal) * chartH;
+    const actualH = (r.actualValue / maxVal) * chartH;
+
+    // Target bar
+    ctx.fillStyle = "#C7D2FE";
+    ctx.beginPath();
+    ctx.roundRect(x - barWidth - 2, padding.top + chartH - targetH, barWidth, targetH, [4, 4, 0, 0]);
+    ctx.fill();
+
+    // Target value label
+    if (r.targetValue > 0) {
+      ctx.fillStyle = "#9CA3AF";
+      ctx.font = "9px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(Number(r.targetValue).toFixed(1), x - barWidth / 2 - 2, padding.top + chartH - targetH - 3);
+    }
+
+    // Actual bar
+    ctx.fillStyle = "#4F46E5";
+    ctx.beginPath();
+    ctx.roundRect(x + 2, padding.top + chartH - actualH, barWidth, actualH, [4, 4, 0, 0]);
+    ctx.fill();
+
+    // Actual value label
+    if (r.actualValue > 0) {
+      ctx.fillStyle = "#4F46E5";
+      ctx.font = "9px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(Number(r.actualValue).toFixed(1), x + barWidth / 2 + 2, padding.top + chartH - actualH - 3);
+    }
+
+    // Label
+    ctx.fillStyle = "#6B7280";
+    ctx.font = "12px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(r.label || r.teamName, x, h - padding.bottom + 20);
+  });
+
+  // Legend
+  ctx.fillStyle = "#C7D2FE";
+  ctx.fillRect(padding.left, h - 15, 12, 12);
+  ctx.fillStyle = "#6B7280";
+  ctx.font = "11px sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText("目标产值", padding.left + 16, h - 5);
+  ctx.fillStyle = "#4F46E5";
+  ctx.fillRect(padding.left + 80, h - 15, 12, 12);
+  ctx.fillStyle = "#6B7280";
+  ctx.fillText("实际产值", padding.left + 96, h - 5);
+}
+
+function drawHoursChart(data) {
+  const canvas = document.getElementById("chart-hours");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width * 2;
+  canvas.height = rect.height * 2;
+  ctx.scale(2, 2);
+  const w = rect.width;
+  const h = rect.height;
+
+  const padding = { top: 32, right: 20, bottom: 40, left: 60 };
+  const chartW = w - padding.left - padding.right;
+  const chartH = h - padding.top - padding.bottom;
+
+  const maxVal = Math.max(...data.map(r => Math.max(r.standardHours, r.actualHours, r.abnormalReasons.reduce((s,a)=>s+a.hours,0)))) * 1.25;
+  const barWidth = chartW / data.length / 4;
+  const groupWidth = chartW / data.length;
+
+  // Grid lines
+  ctx.strokeStyle = "#F3F4F6";
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = padding.top + (chartH / 4) * i;
+    ctx.beginPath();
+    ctx.moveTo(padding.left, y);
+    ctx.lineTo(w - padding.right, y);
+    ctx.stroke();
+    ctx.fillStyle = "#6B7280";
+    ctx.font = "11px sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(Math.round((maxVal / 4) * (4 - i)) + "h", padding.left - 8, y + 4);
+  }
+
+  // Bars
+  data.forEach((r, i) => {
+    const x = padding.left + groupWidth * i + groupWidth / 2;
+    const stdH = (r.standardHours / maxVal) * chartH;
+    const actH = (r.actualHours / maxVal) * chartH;
+    const lossH = (r.abnormalReasons.reduce((s,a)=>s+a.hours,0) / maxVal) * chartH;
+
+    ctx.fillStyle = "#A7F3D0";
+    ctx.beginPath();
+    ctx.roundRect(x - barWidth * 1.5 - 4, padding.top + chartH - stdH, barWidth, stdH, [4, 4, 0, 0]);
+    ctx.fill();
+
+    // Planned hours label
+    if (r.standardHours > 0) {
+      ctx.fillStyle = "#9CA3AF";
+      ctx.font = "9px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(Math.round(r.standardHours), x - barWidth * 1.5 - 4 + barWidth / 2, padding.top + chartH - stdH - 3);
+    }
+
+    ctx.fillStyle = "#10B981";
+    ctx.beginPath();
+    ctx.roundRect(x - barWidth / 2 - 2, padding.top + chartH - actH, barWidth, actH, [4, 4, 0, 0]);
+    ctx.fill();
+
+    // Actual hours label
+    if (r.actualHours > 0) {
+      ctx.fillStyle = "#10B981";
+      ctx.font = "9px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(Math.round(r.actualHours), x - barWidth / 2 - 2 + barWidth / 2, padding.top + chartH - actH - 3);
+    }
+
+    ctx.fillStyle = "#FCA5A5";
+    ctx.beginPath();
+    ctx.roundRect(x + barWidth / 2 + 2, padding.top + chartH - lossH, barWidth, lossH, [4, 4, 0, 0]);
+    ctx.fill();
+
+    // Loss hours label
+    if (lossH > 2) {
+      ctx.fillStyle = "#DC2626";
+      ctx.font = "9px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(Math.round(r.abnormalReasons.reduce((s,a)=>s+a.hours,0)), x + barWidth / 2 + 2 + barWidth / 2, padding.top + chartH - lossH - 3);
+    }
+
+    ctx.fillStyle = "#6B7280";
+    ctx.font = "12px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(r.label || r.teamName, x, h - padding.bottom + 20);
+  });
+
+  // Legend
+  const legends = [["#A7F3D0","计划工时"],["#10B981","实际工时"],["#FCA5A5","损失工时"]];
+  legends.forEach((l, i) => {
+    ctx.fillStyle = l[0];
+    ctx.fillRect(padding.left + i * 80, h - 15, 12, 12);
+    ctx.fillStyle = "#6B7280";
+    ctx.font = "11px sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(l[1], padding.left + i * 80 + 16, h - 5);
+  });
+}
+
+function drawCompletionChart(data) {
+  const canvas = document.getElementById("chart-completion");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width * 2;
+  canvas.height = rect.height * 2;
+  ctx.scale(2, 2);
+  const w = rect.width;
+  const h = rect.height;
+
+  const padding = { top: 20, right: 40, bottom: 20, left: 80 };
+  const chartW = w - padding.left - padding.right;
+  const chartH = h - padding.top - padding.bottom;
+  const barHeight = chartH / data.length * 0.6;
+  const gap = chartH / data.length;
+
+  // Transform raw records into chart data
+  const chartData = data.map(r => {
+    const rate = pctNum(r.actualValue, r.targetValue);
+    return { name: r.label || r.teamName, rate: rate, color: getCompletionColor(rate) };
+  });
+
+  // Grid lines
+  ctx.strokeStyle = "#F3F4F6";
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const x = padding.left + (chartW / 4) * i;
+    ctx.beginPath();
+    ctx.moveTo(x, padding.top);
+    ctx.lineTo(x, h - padding.bottom);
+    ctx.stroke();
+    ctx.fillStyle = "#6B7280";
+    ctx.font = "11px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText((30 * i) + "%", x, h - 5);
+  }
+
+  // Bars
+  chartData.forEach((r, i) => {
+    const y = padding.top + gap * i + (gap - barHeight) / 2;
+    const barW = (r.rate / 120) * chartW;
+
+    ctx.fillStyle = r.color;
+    ctx.beginPath();
+    ctx.roundRect(padding.left, y, barW, barHeight, [0, 6, 6, 0]);
+    ctx.fill();
+
+    ctx.fillStyle = "#374151";
+    ctx.font = "13px sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(r.name, padding.left - 10, y + barHeight / 2 + 4);
+
+    ctx.fillStyle = "#374151";
+    ctx.font = "12px sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(r.rate.toFixed(1) + "%", padding.left + barW + 8, y + barHeight / 2 + 4);
+  });
+}
+
+function drawReasonsChart(data) {
+  const canvas = document.getElementById("chart-reasons");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width * 2;
+  canvas.height = rect.height * 2;
+  ctx.scale(2, 2);
+  const w = rect.width;
+  const h = rect.height;
+
+  if (data.length === 0) {
+    ctx.fillStyle = "#9CA3AF";
+    ctx.font = "14px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("暂无异常数据", w / 2, h / 2);
+    return;
+  }
+
+  const centerX = w / 2 - 40;
+  const centerY = h / 2;
+  const outerR = Math.min(w, h) / 2 - 30;
+  const innerR = outerR * 0.6;
+  const total = data.reduce((s, d) => s + d.value, 0);
+
+  let startAngle = -Math.PI / 2;
+  data.forEach((d, i) => {
+    const sliceAngle = (d.value / total) * Math.PI * 2;
+    const endAngle = startAngle + sliceAngle;
+
+    ctx.fillStyle = REASON_COLORS[d.name] || "#6B7280";
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, outerR, startAngle, endAngle);
+    ctx.arc(centerX, centerY, innerR, endAngle, startAngle, true);
+    ctx.closePath();
+    ctx.fill();
+
+    // Label
+    const midAngle = startAngle + sliceAngle / 2;
+    const labelR = outerR + 15;
+    const labelX = centerX + Math.cos(midAngle) * labelR;
+    const labelY = centerY + Math.sin(midAngle) * labelR;
+    ctx.fillStyle = "#374151";
+    ctx.font = "11px sans-serif";
+    ctx.textAlign = midAngle > Math.PI / 2 && midAngle < Math.PI * 1.5 ? "right" : "left";
+    ctx.fillText(d.name + " " + ((d.value/total)*100).toFixed(0) + "%", labelX, labelY);
+
+    startAngle = endAngle;
+  });
+
+  // Center text
+  ctx.fillStyle = "#111827";
+  ctx.font = "bold 20px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(total + "h", centerX, centerY + 7);
+  ctx.fillStyle = "#6B7280";
+  ctx.font = "11px sans-serif";
+  ctx.fillText("总损失工时", centerX, centerY + 22);
+}
+
+// Polyfill for roundRect
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, radii) {
+    const r = Array.isArray(radii) ? radii : [radii, radii, radii, radii];
+    const [tl, tr, br, bl] = r.map(v => Math.min(v, w/2, h/2));
+    this.moveTo(x + tl, y);
+    this.lineTo(x + w - tr, y);
+    this.quadraticCurveTo(x + w, y, x + w, y + tr);
+    this.lineTo(x + w, y + h - br);
+    this.quadraticCurveTo(x + w, y + h, x + w - br, y + h);
+    this.lineTo(x + bl, y + h);
+    this.quadraticCurveTo(x, y + h, x, y + h - bl);
+    this.lineTo(x, y + tl);
+    this.quadraticCurveTo(x, y, x + tl, y);
+    this.closePath();
+  };
+}
+</script>
+</body>
+</html>
