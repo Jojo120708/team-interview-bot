@@ -700,9 +700,9 @@ function enqueueUpload(record) {
 }
 function dequeueUpload(record) {
   var queue = getPendingUploads();
-  // Remove matching record by teamName+date+submitTime
+  // Remove matching record by teamName+date (overwrite mode)
   queue = queue.filter(function(q) {
-    return !(q.record.teamName === record.teamName && q.record.date === record.date && q.record.submitTime === record.submitTime);
+    return !(q.record.teamName === record.teamName && q.record.date === record.date);
   });
   savePendingUploads(queue);
 }
@@ -745,16 +745,19 @@ function doCloudUpload(record, attempt, isRetry) {
           var resp = JSON.parse(xhr.responseText);
           var data = resp.record || {};
           var records = data.records || [];
-          // Check if this record already exists (avoid duplicates)
-          var alreadyExists = records.some(function(r) {
-            return r.teamName === record.teamName && r.date === record.date && r.submitTime === record.submitTime;
-          });
-          if (alreadyExists) {
-            if (!isRetry) showCloudToast("云端同步完成", "success");
-            dequeueUpload(record);
-            return;
+          // Find existing record for same team+date (overwrite, one per team per day)
+          var existIdx = -1;
+          for (var i = 0; i < records.length; i++) {
+            if (records[i].teamName === record.teamName && records[i].date === record.date) {
+              existIdx = i;
+              break;
+            }
           }
-          records.push(record);
+          if (existIdx >= 0) {
+            records[existIdx] = record;
+          } else {
+            records.push(record);
+          }
           // Write back
           var xhr2 = new XMLHttpRequest();
           xhr2.open('PUT', JSONBIN_BASE_URL, true);
@@ -815,7 +818,7 @@ function verifyUpload(record, attempt, isRetry) {
           var data = resp.record || {};
           var records = data.records || [];
           var found = records.some(function(r) {
-            return r.teamName === record.teamName && r.date === record.date && r.submitTime === record.submitTime;
+            return r.teamName === record.teamName && r.date === record.date;
           });
           if (found) {
             dequeueUpload(record);
@@ -2962,6 +2965,11 @@ function goBackToMissing() {
 function submitInterview() {
   if (isSubmitted) return; // prevent duplicate submissions
   if (!isAllAnswered()) return; // safety check: all questions must be answered
+  // Check if overwriting existing record for same team+date
+  var existRecord = records.find(function(r) { return r.teamName === answers.teamName && r.date === answers.date; });
+  if (existRecord && !confirm("该班组今日已有提交记录，新数据将覆盖原有记录，是否继续？")) {
+    return;
+  }
   isSubmitted = true;
   var reasonList = answers.reasonList || [];
   var isDLE = isDLEMode();
@@ -3036,7 +3044,14 @@ function submitInterview() {
       isDLE: false,
     };
   }
-  records.push(record);
+  // Overwrite existing record for same team+date (one record per team per day)
+  var existingIdx = records.findIndex(function(r) { return r.teamName === record.teamName && r.date === record.date; });
+  var isOverwrite = existingIdx >= 0;
+  if (isOverwrite) {
+    records[existingIdx] = record;
+  } else {
+    records.push(record);
+  }
   saveRecords();
   sendDingTalkNotification(record);
   uploadRecordToCloud(record);
