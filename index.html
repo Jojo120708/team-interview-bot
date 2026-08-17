@@ -3978,7 +3978,7 @@ function drawReasonsChart(data) {
   ctx.fillStyle = "#111827";
   ctx.font = "bold 20px sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText(total + "h", centerX, centerY + 7);
+  ctx.fillText(Math.round(total) + "h", centerX, centerY + 7);
   ctx.fillStyle = "#6B7280";
   ctx.font = "11px sans-serif";
   ctx.fillText("总损失工时", centerX, centerY + 22);
