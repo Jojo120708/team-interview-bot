@@ -433,6 +433,8 @@ document.addEventListener('DOMContentLoaded', function() {
       case 'backToCloudData': showCloudData(); break;
     }
   });
+  // Retry any failed cloud uploads from previous sessions
+  setTimeout(function() { retryPendingUploads(); }, 3000);
 });
 
 // ==================== DATA ====================
@@ -485,6 +487,28 @@ const REASON_CATEGORIES = [
     calcHours: function(d) { return Number(d.impactHours||0) * Number(d.affectedPeople||0); }
   }
 ];
+
+// Generate note for 产品类 reasons: "X2411 70小时" format
+function generateProductNote(item) {
+  var d = item.data || {};
+  var totalH = Number(d.hoursPerPerson||0) * Number(d.affectedPeople||0);
+  return (d.productModel||'') + ' ' + totalH + '小时';
+}
+
+// Group 产品类 entries by reason for combined display: "新品调试(175.0h)-X2411 70小时，X81C 50小时"
+function groupProductReasons(reasons) {
+  var groups = {};
+  reasons.forEach(function(a) {
+    var cat = findCategory(a.reason);
+    if (cat && cat.name === "产品类") {
+      if (!groups[a.reason]) groups[a.reason] = { reason: a.reason, totalHours: 0, parts: [] };
+      groups[a.reason].totalHours += a.hours || 0;
+      var d = a.data || {};
+      groups[a.reason].parts.push((d.productModel||'') + ' ' + (Number(d.hoursPerPerson||0) * Number(d.affectedPeople||0)) + '小时');
+    }
+  });
+  return groups;
+}
 
 const REASON_COLORS = {
   "设备原因":"#EF4444","模具原因":"#F59E0B","工艺原因":"#8B5CF6",
@@ -647,38 +671,188 @@ var JSONBIN_BIN_ID = "6a631bd7f5f4af5e29ba44f4";
 var JSONBIN_BASE_URL = "https://api.jsonbin.io/v3/b/" + JSONBIN_BIN_ID;
 var ADMIN_PASSWORD = "minth2026";
 
+// Toast notification helper
+function showCloudToast(msg, type) {
+  var existing = document.getElementById("cloud-toast");
+  if (existing) existing.remove();
+  var toast = document.createElement("div");
+  toast.id = "cloud-toast";
+  var bg = type === "success" ? "#ECFDF5" : type === "error" ? "#FEF2F2" : "#FFFBEB";
+  var border = type === "success" ? "#059669" : type === "error" ? "#DC2626" : "#D97706";
+  var color = type === "success" ? "#065F46" : type === "error" ? "#991B1B" : "#92400E";
+  toast.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);background:" + bg + ";border:2px solid " + border + ";border-radius:12px;padding:12px 22px;z-index:10000;max-width:420px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,0.15);font-size:13px;color:" + color + ";line-height:1.5;transition:opacity 0.4s;";
+  toast.innerHTML = msg;
+  document.body.appendChild(toast);
+  setTimeout(function() { toast.style.opacity = "0"; setTimeout(function() { toast.remove(); }, 500); }, 4000);
+}
+
+// Pending upload queue (localStorage) for failed uploads
+function getPendingUploads() {
+  try { return JSON.parse(localStorage.getItem("pendingCloudUploads") || "[]"); } catch(e) { return []; }
+}
+function savePendingUploads(queue) {
+  try { localStorage.setItem("pendingCloudUploads", JSON.stringify(queue)); } catch(e) {}
+}
+function enqueueUpload(record) {
+  var queue = getPendingUploads();
+  queue.push({ record: record, attempts: 0, lastAttempt: new Date().toISOString() });
+  savePendingUploads(queue);
+}
+function dequeueUpload(record) {
+  var queue = getPendingUploads();
+  // Remove matching record by teamName+date+submitTime
+  queue = queue.filter(function(q) {
+    return !(q.record.teamName === record.teamName && q.record.date === record.date && q.record.submitTime === record.submitTime);
+  });
+  savePendingUploads(queue);
+}
+
+// Retry any pending uploads on page load
+function retryPendingUploads() {
+  var queue = getPendingUploads();
+  if (queue.length === 0) return;
+  console.log("[Cloud] Retrying " + queue.length + " pending upload(s)...");
+  queue.forEach(function(item, idx) {
+    setTimeout(function() {
+      doCloudUpload(item.record, 0, true);
+    }, idx * 3000); // stagger retries 3s apart
+  });
+}
+
+// Core upload with retry + verification
+function doCloudUpload(record, attempt, isRetry) {
+  var MAX_RETRIES = 3;
+  if (attempt >= MAX_RETRIES) {
+    // All retries exhausted - save to pending queue
+    enqueueUpload(record);
+    if (!isRetry) {
+      showCloudToast("云端同步失败，将在后台重试", "error");
+    }
+    return;
+  }
+
+  // Random delay to stagger concurrent uploads (500-2500ms + attempt*1000)
+  var delay = Math.floor(Math.random() * 2000) + 500 + attempt * 1000;
+
+  setTimeout(function() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', JSONBIN_BASE_URL + '/latest', true);
+    xhr.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
+    xhr.timeout = 10000;
+    xhr.onload = function() {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          var resp = JSON.parse(xhr.responseText);
+          var data = resp.record || {};
+          var records = data.records || [];
+          // Check if this record already exists (avoid duplicates)
+          var alreadyExists = records.some(function(r) {
+            return r.teamName === record.teamName && r.date === record.date && r.submitTime === record.submitTime;
+          });
+          if (alreadyExists) {
+            if (!isRetry) showCloudToast("云端同步完成", "success");
+            dequeueUpload(record);
+            return;
+          }
+          records.push(record);
+          // Write back
+          var xhr2 = new XMLHttpRequest();
+          xhr2.open('PUT', JSONBIN_BASE_URL, true);
+          xhr2.setRequestHeader('Content-Type', 'application/json');
+          xhr2.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
+          xhr2.timeout = 10000;
+          xhr2.onload = function() {
+            if (xhr2.status >= 200 && xhr2.status < 300) {
+              // Verify: re-read to confirm our record was saved
+              verifyUpload(record, attempt, isRetry);
+            } else {
+              // PUT failed, retry
+              console.warn("[Cloud] PUT returned " + xhr2.status + ", retry " + (attempt+1));
+              doCloudUpload(record, attempt + 1, isRetry);
+            }
+          };
+          xhr2.onerror = function() {
+            console.warn("[Cloud] PUT error, retry " + (attempt+1));
+            doCloudUpload(record, attempt + 1, isRetry);
+          };
+          xhr2.ontimeout = function() {
+            console.warn("[Cloud] PUT timeout, retry " + (attempt+1));
+            doCloudUpload(record, attempt + 1, isRetry);
+          };
+          xhr2.send(JSON.stringify({ records: records }));
+        } catch(e) {
+          console.warn("[Cloud] Parse error, retry " + (attempt+1), e);
+          doCloudUpload(record, attempt + 1, isRetry);
+        }
+      } else {
+        console.warn("[Cloud] GET returned " + xhr.status + ", retry " + (attempt+1));
+        doCloudUpload(record, attempt + 1, isRetry);
+      }
+    };
+    xhr.onerror = function() {
+      console.warn("[Cloud] GET error, retry " + (attempt+1));
+      doCloudUpload(record, attempt + 1, isRetry);
+    };
+    xhr.ontimeout = function() {
+      console.warn("[Cloud] GET timeout, retry " + (attempt+1));
+      doCloudUpload(record, attempt + 1, isRetry);
+    };
+    xhr.send();
+  }, delay);
+}
+
+// Verify upload succeeded by re-reading data
+function verifyUpload(record, attempt, isRetry) {
+  setTimeout(function() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', JSONBIN_BASE_URL + '/latest', true);
+    xhr.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
+    xhr.timeout = 10000;
+    xhr.onload = function() {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          var resp = JSON.parse(xhr.responseText);
+          var data = resp.record || {};
+          var records = data.records || [];
+          var found = records.some(function(r) {
+            return r.teamName === record.teamName && r.date === record.date && r.submitTime === record.submitTime;
+          });
+          if (found) {
+            dequeueUpload(record);
+            if (!isRetry) showCloudToast("云端同步完成", "success");
+            console.log("[Cloud] Upload verified for " + record.teamName + " " + record.date);
+          } else {
+            // Race condition detected - our write was overwritten, retry
+            console.warn("[Cloud] Verification failed (race condition), retry " + (attempt+1));
+            doCloudUpload(record, attempt + 1, isRetry);
+          }
+        } catch(e) {
+          // Can't verify, assume success to avoid infinite loop
+          dequeueUpload(record);
+          if (!isRetry) showCloudToast("云端同步完成", "success");
+        }
+      } else {
+        // Can't verify, assume success
+        dequeueUpload(record);
+        if (!isRetry) showCloudToast("云端同步完成", "success");
+      }
+    };
+    xhr.onerror = function() {
+      // Can't verify, assume success
+      dequeueUpload(record);
+      if (!isRetry) showCloudToast("云端同步完成", "success");
+    };
+    xhr.ontimeout = function() {
+      dequeueUpload(record);
+      if (!isRetry) showCloudToast("云端同步完成", "success");
+    };
+    xhr.send();
+  }, 800); // wait 800ms after PUT before verifying
+}
+
 function uploadRecordToCloud(record) {
   if (!JSONBIN_API_KEY || !JSONBIN_BIN_ID) return;
-  // Read existing records, append new one, write back
-  var xhr = new XMLHttpRequest();
-  xhr.open('GET', JSONBIN_BASE_URL + '/latest', true);
-  xhr.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
-  xhr.timeout = 8000;
-  xhr.onload = function() {
-    if (xhr.status >= 200 && xhr.status < 300) {
-      try {
-        var resp = JSON.parse(xhr.responseText);
-        var data = resp.record || {};
-        var records = data.records || [];
-        records.push(record);
-        // Write back
-        var xhr2 = new XMLHttpRequest();
-        xhr2.open('PUT', JSONBIN_BASE_URL, true);
-        xhr2.setRequestHeader('Content-Type', 'application/json');
-        xhr2.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
-        xhr2.timeout = 8000;
-        xhr2.onload = function() {
-          // Upload complete (success or fail, silently handled)
-        };
-        xhr2.onerror = function() {};
-        xhr2.ontimeout = function() {};
-        xhr2.send(JSON.stringify({ records: records }));
-      } catch(e) {}
-    }
-  };
-  xhr.onerror = function() {};
-  xhr.ontimeout = function() {};
-  xhr.send();
+  doCloudUpload(record, 0, false);
 }
 
 // ==================== SETTINGS MODAL ====================
@@ -937,10 +1111,21 @@ function sendDingTalkNotification(record) {
   if (record.abnormalReasons && record.abnormalReasons.length > 0) {
     var totalLoss = record.abnormalReasons.reduce(function(s, a) { return s + a.hours; }, 0);
     text += '\n**异常原因（合计 ' + totalLoss.toFixed(1) + 'h）：**\n\n';
+    // Group 产品类 entries by reason for combined display
+    var dtProductGroups = groupProductReasons(record.abnormalReasons);
+    var dtShownProduct = {};
     record.abnormalReasons.forEach(function(a) {
-      text += '- **' + a.reason + '** ' + a.hours.toFixed(1) + 'h';
-      if (a.note) text += '：' + a.note;
-      text += '\n';
+      var cat = findCategory(a.reason);
+      if (cat && cat.name === "产品类") {
+        if (dtShownProduct[a.reason]) return;
+        dtShownProduct[a.reason] = true;
+        var pg = dtProductGroups[a.reason];
+        text += '- **' + a.reason + '** ' + pg.totalHours.toFixed(1) + 'h：' + a.reason + '(' + pg.totalHours.toFixed(1) + 'h)-' + pg.parts.join('，') + '\n';
+      } else {
+        text += '- **' + a.reason + '** ' + a.hours.toFixed(1) + 'h';
+        if (a.note) text += '：' + a.note;
+        text += '\n';
+      }
     });
     if (record.coverage != null) {
       text += '\n差距覆盖率：' + record.coverage.toFixed(0) + '%';
@@ -1138,19 +1323,59 @@ function showAdminPanel() {
   // Delete individual records
   html += '<div style="padding:16px;border:1.5px solid #E5E7EB;border-radius:12px;background:#F9FAFB;">' +
     '<div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:4px;">删除单条记录</div>' +
-    '<div style="font-size:12px;color:#6B7280;margin-bottom:12px;">点击记录右侧"删除"按钮移除特定数据</div>';
+    '<div style="font-size:12px;color:#6B7280;margin-bottom:12px;">点击记录展开明细，确认后再删除</div>';
   if (cloudRecordsCache.length === 0) {
     html += '<div style="color:#9CA3AF;font-size:12px;">暂无数据</div>';
   } else {
-    html += '<div style="max-height:300px;overflow-y:auto;">';
+    html += '<div style="max-height:400px;overflow-y:auto;">';
     cloudRecordsCache.forEach(function(r, i) {
+      var isDLE = r.isDLE || r.teamName === "二部一课" || r.teamName === "二部二课";
       var compRate = r.targetValue > 0 ? (r.actualValue / r.targetValue * 100).toFixed(1) : '0.0';
-      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid #F3F4F6;font-size:12px;">' +
-        '<div><span style="font-weight:600;">' + (r.teamName || '-') + '</span> ' +
-        '<span style="color:#6B7280;">' + (r.date || '-') + '</span> ' +
-        '<span style="color:#6B7280;">产值:' + (r.actualValue || 0) + ' 达成' + compRate + '%</span></div>' +
+      var typeLabel = isDLE ? 'DLE' : '产值';
+      var typeColor = isDLE ? '#7C3AED' : '#4F46E5';
+      var reasonsSummary = '';
+      if (r.abnormalReasons && r.abnormalReasons.length > 0) {
+        var sumProductGroups = groupProductReasons(r.abnormalReasons);
+        var sumShownProduct = {};
+        var summaryParts = [];
+        r.abnormalReasons.forEach(function(a) {
+          var sumCat = findCategory(a.reason);
+          if (sumCat && sumCat.name === "产品类") {
+            if (sumShownProduct[a.reason]) return;
+            sumShownProduct[a.reason] = true;
+            var spg = sumProductGroups[a.reason];
+            summaryParts.push(a.reason + '(' + spg.totalHours.toFixed(1) + 'h)-' + spg.parts.join('，'));
+          } else {
+            summaryParts.push(a.reason + '(' + a.hours + 'h)');
+          }
+        });
+        reasonsSummary = summaryParts.join('、');
+      }
+      html += '<div style="border-bottom:1px solid #F3F4F6;">';
+      // Summary row (always visible)
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 10px;cursor:pointer;" onclick="toggleRecordDetail(' + i + ')">' +
+        '<div style="flex:1;min-width:0;">' +
+        '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">' +
+        '<span style="font-weight:600;font-size:13px;color:#111827;">' + (r.teamName || '-') + '</span>' +
+        '<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:' + typeColor + ';color:#fff;font-weight:600;">' + typeLabel + '</span>' +
+        '</div>' +
+        '<div style="font-size:11px;color:#6B7280;">' + (r.date || '-') + ' · 目标' + (isDLE ? '-' : (r.targetValue || 0)) + '万 · 实际' + (isDLE ? '-' : (r.actualValue || 0)) + '万 · 达成' + (isDLE ? '-' : compRate) + '%</div>' +
+        (isDLE ? '<div style="font-size:11px;color:#6B7280;">有效工时' + (r.effectiveHours || 0) + 'h · 实际工时' + (r.actualHours || 0) + 'h</div>' : '') +
+        (!isDLE ? '<div style="font-size:11px;color:#6B7280;">计划工时' + (r.standardHours || 0) + 'h · 实际工时' + (r.actualHours || 0) + 'h</div>' : '') +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">' +
+        '<span id="rd-arrow-' + i + '" style="font-size:10px;color:#9CA3AF;transition:transform 0.2s;">▼</span>' +
         '<button data-action="deleteCloudRecord" data-param="' + i + '" style="padding:4px 12px;border-radius:6px;border:1px solid #DC2626;background:#fff;color:#DC2626;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;">删除</button>' +
+        '</div></div>';
+      // Detail row (hidden by default)
+      html += '<div id="rd-detail-' + i + '" style="display:none;padding:6px 10px 10px 10px;background:#F3F4F6;border-radius:0 0 8px 8px;font-size:11px;color:#374151;">' +
+        '<div style="margin-bottom:4px;"><strong>提交时间：</strong>' + (r.submitTime || '-') + '</div>' +
+        (!isDLE ? '<div style="margin-bottom:4px;"><strong>目标产值：</strong>' + (r.targetValue || 0) + ' 万元 &nbsp; <strong>实际产值：</strong>' + (r.actualValue || 0) + ' 万元 &nbsp; <strong>达成率：</strong>' + compRate + '%</div>' : '') +
+        (!isDLE ? '<div style="margin-bottom:4px;"><strong>计划工时：</strong>' + (r.standardHours || 0) + 'h &nbsp; <strong>实际工时：</strong>' + (r.actualHours || 0) + 'h</div>' : '') +
+        (isDLE ? '<div style="margin-bottom:4px;"><strong>有效工时：</strong>' + (r.effectiveHours || 0) + 'h &nbsp; <strong>实际工时：</strong>' + (r.actualHours || 0) + 'h</div>' : '') +
+        (reasonsSummary ? '<div><strong>异常原因：</strong>' + reasonsSummary + '</div>' : '<div style="color:#9CA3AF;">无异常原因</div>') +
         '</div>';
+      html += '</div>';
     });
     html += '</div>';
   }
@@ -1161,6 +1386,19 @@ function showAdminPanel() {
     '</div>';
   html += '</div></div>';
   content.innerHTML = html;
+}
+
+function toggleRecordDetail(index) {
+  var detail = document.getElementById('rd-detail-' + index);
+  var arrow = document.getElementById('rd-arrow-' + index);
+  if (!detail) return;
+  if (detail.style.display === 'none') {
+    detail.style.display = 'block';
+    if (arrow) arrow.style.transform = 'rotate(180deg)';
+  } else {
+    detail.style.display = 'none';
+    if (arrow) arrow.style.transform = 'rotate(0deg)';
+  }
 }
 
 function clearAllCloudData() {
@@ -1202,7 +1440,23 @@ function deleteCloudRecord(indexStr) {
   var idx = parseInt(indexStr, 10);
   if (isNaN(idx) || idx < 0 || idx >= cloudRecordsCache.length) return;
   var rec = cloudRecordsCache[idx];
-  if (!confirm('确定删除这条记录吗？\n' + (rec.teamName || '') + ' ' + (rec.date || '') + ' 产值:' + (rec.actualValue || 0))) return;
+  var isDLE = rec.isDLE || rec.teamName === "二部一课" || rec.teamName === "二部二课";
+  var confirmMsg = '确定删除这条记录吗？\n\n';
+  confirmMsg += '班组：' + (rec.teamName || '-') + '\n';
+  confirmMsg += '日期：' + (rec.date || '-') + '\n';
+  confirmMsg += '类型：' + (isDLE ? 'DLE分析' : '产值分析') + '\n';
+  if (!isDLE) {
+    confirmMsg += '目标产值：' + (rec.targetValue || 0) + ' 万元\n';
+    confirmMsg += '实际产值：' + (rec.actualValue || 0) + ' 万元\n';
+    confirmMsg += '计划工时：' + (rec.standardHours || 0) + 'h\n';
+  } else {
+    confirmMsg += '有效工时：' + (rec.effectiveHours || 0) + 'h\n';
+  }
+  confirmMsg += '实际工时：' + (rec.actualHours || 0) + 'h\n';
+  if (rec.abnormalReasons && rec.abnormalReasons.length > 0) {
+    confirmMsg += '异常原因：' + rec.abnormalReasons.map(function(a) { return a.reason + '(' + a.hours + 'h)'; }).join('、') + '\n';
+  }
+  if (!confirm(confirmMsg)) return;
   // Build new records array without this item
   var newRecords = [];
   for (var i = 0; i < cloudRecordsCache.length; i++) {
@@ -1720,12 +1974,26 @@ function renderInterview() {
     var reasonList = answers.reasonList || [];
     let reasonText = "无异常";
     if (reasonList.length > 0) {
-      reasonText = reasonList.map(function(item) {
+      var chatProductGroups = groupProductReasons(reasonList.map(function(item) {
+        var cat = findCategory(item.reason);
+        return { reason: item.reason, hours: cat ? cat.calcHours(item.data || {}) : 0, data: item.data || {} };
+      }));
+      var chatShownProduct = {};
+      var chatParts = [];
+      reasonList.forEach(function(item) {
         var cat = findCategory(item.reason);
         var hours = cat ? cat.calcHours(item.data || {}) : 0;
-        var note = item.note || "";
-        return item.reason + "（" + hours.toFixed(1) + "小时" + (note ? "，" + note : "") + "）";
-      }).join("、");
+        if (cat && cat.name === "产品类") {
+          if (chatShownProduct[item.reason]) return;
+          chatShownProduct[item.reason] = true;
+          var cpg = chatProductGroups[item.reason];
+          chatParts.push(item.reason + "（" + cpg.totalHours.toFixed(1) + "小时）-" + cpg.parts.join("，"));
+        } else {
+          var note = item.note || "";
+          chatParts.push(item.reason + "（" + hours.toFixed(1) + "小时" + (note ? "，" + note : "") + "）");
+        }
+      });
+      reasonText = chatParts.join("、");
     }
     chatHistory.innerHTML += '<div class="chat-msg question"><div class="chat-bubble">是否存在以下异常原因？</div></div>';
     chatHistory.innerHTML += '<div class="chat-msg answer"><div class="chat-bubble">'+reasonText+'</div></div>';
@@ -2001,12 +2269,20 @@ function renderReasonDetails() {
         html += '</div>';
       });
 
-      // Note textarea - use reason-specific placeholder
-      var notePh = (cat.notePlaceholders && cat.notePlaceholders[r]) || "请说明具体原因";
-      html += '<div style="display:flex;align-items:flex-start;gap:8px;margin-top:4px">';
-      html += '<label style="font-size:13px;color:#6B7280;min-width:120px;padding-top:8px">备注说明</label>';
-      html += '<textarea class="reason-detail-note" placeholder="'+notePh+'" style="--reason-color:'+color+'" id="reason-note-'+idx+'" data-idx="'+idx+'">'+noteVal+'</textarea>';
-      html += '</div>';
+      // Note: for 产品类, auto-generate from product model data; for others, show textarea
+      if (cat.name === "产品类") {
+        var autoNote = generateProductNote(entry.item);
+        html += '<div style="display:flex;align-items:flex-start;gap:8px;margin-top:4px">';
+        html += '<label style="font-size:13px;color:#6B7280;min-width:120px;padding-top:8px">备注说明</label>';
+        html += '<div id="reason-autonote-'+idx+'" style="font-size:13px;color:'+color+';font-weight:500;padding:8px 12px;background:'+color+'10;border-radius:8px;min-height:36px;line-height:1.5;">'+(autoNote.trim() ? autoNote : '<span style="color:#9CA3AF;font-weight:400;">填写产品型号后自动生成</span>')+'</div>';
+        html += '</div>';
+      } else {
+        var notePh = (cat.notePlaceholders && cat.notePlaceholders[r]) || "请说明具体原因";
+        html += '<div style="display:flex;align-items:flex-start;gap:8px;margin-top:4px">';
+        html += '<label style="font-size:13px;color:#6B7280;min-width:120px;padding-top:8px">备注说明</label>';
+        html += '<textarea class="reason-detail-note" placeholder="'+notePh+'" style="--reason-color:'+color+'" id="reason-note-'+idx+'" data-idx="'+idx+'">'+noteVal+'</textarea>';
+        html += '</div>';
+      }
 
       html += '</div>';
     });
@@ -2030,8 +2306,11 @@ function renderReasonDetails() {
         if (f === 'productModel') { if (val === undefined || (typeof val === 'string' && val.trim() === "")) missing.push(cat.fieldLabels[f]); }
         else { if (val === undefined || val === "" || Number(val) <= 0) missing.push(cat.fieldLabels[f]); }
       });
-      var note = item.note;
-      if (note === undefined || (typeof note === 'string' && note.trim() === "")) missing.push("备注说明");
+      // For 产品类, note is auto-generated - skip manual note check
+      if (cat.name !== "产品类") {
+        var note = item.note;
+        if (note === undefined || (typeof note === 'string' && note.trim() === "")) missing.push("备注说明");
+      }
       if (missing.length > 0) _incomplete.push({ reason: item.reason, missing: missing });
     });
     if (_incomplete.length > 0) {
@@ -2165,7 +2444,8 @@ function addMoreReasons() {
   // Save current form values before navigating away
   saveReasonFieldValues();
   isAddingMore = true;
-  currentStep = QUESTIONS.length + 1; // go back to reason selection
+  var visibleQs = getVisibleQuestions();
+  currentStep = visibleQs.length + 1; // go back to reason selection
   renderInterview();
 }
 
@@ -2216,15 +2496,13 @@ function pickNewReason(reasonName) {
   renderReasonDetails();
 }
 
-// Check if ALL questions and reason details have been answered (for completion screen validation)
-function isAllAnswered() {
+// Check if all fields are filled (without coverage check)
+function isFieldsComplete() {
   var visibleQs = getVisibleQuestions();
-  // Check all main questions
   for (var i = 0; i < visibleQs.length; i++) {
     var val = answers[visibleQs[i].id];
     if (val === undefined || val === "") return false;
   }
-  // Check all reason details
   var reasonList = answers.reasonList || [];
   for (var j = 0; j < reasonList.length; j++) {
     var item = reasonList[j];
@@ -2240,8 +2518,24 @@ function isAllAnswered() {
         if (fval === undefined || fval === "" || Number(fval) <= 0) return false;
       }
     }
-    var note = item.note;
-    if (note === undefined || (typeof note === 'string' && note.trim() === "")) return false;
+    // For 产品类, note is auto-generated from product model data - skip manual note check
+    if (cat.name !== "产品类") {
+      var note = item.note;
+      if (note === undefined || (typeof note === 'string' && note.trim() === "")) return false;
+    }
+  }
+  return true;
+}
+
+// Check if ALL questions, reason details, and coverage >= 90% are satisfied
+function isAllAnswered() {
+  if (!isFieldsComplete()) return false;
+  // Check coverage >= 90% when target not met
+  var reasonList = answers.reasonList || [];
+  var needsAnalysis = isDLEMode() ? (calcDLE() < getDLEThreshold()) : isActualPHBelowPlanned();
+  if (needsAnalysis && reasonList.length > 0) {
+    var cov = getCoveragePct();
+    if (cov < 90) return false;
   }
   return true;
 }
@@ -2288,8 +2582,9 @@ function renderCompletion() {
   }
 
   // Check completeness for submit button
+  var fieldsDone = isFieldsComplete();
   var allDone = isAllAnswered();
-  if (!allDone) {
+  if (!fieldsDone) {
     // Build list of missing items
     var missingList = [];
     var visibleQs = getVisibleQuestions();
@@ -2314,8 +2609,11 @@ function renderCompletion() {
           if (mfval === undefined || mfval === "" || Number(mfval) <= 0) missingList.push(mitem.reason + ' - ' + (mcat.fieldLabels[mf] || mf));
         }
       }
-      var mnote = mitem.note;
-      if (mnote === undefined || (typeof mnote === 'string' && mnote.trim() === "")) missingList.push(mitem.reason + ' - 备注说明');
+      // For 产品类, note is auto-generated - skip manual note check
+      if (mcat.name !== "产品类") {
+        var mnote = mitem.note;
+        if (mnote === undefined || (typeof mnote === 'string' && mnote.trim() === "")) missingList.push(mitem.reason + ' - 备注说明');
+      }
     }
     html += '<div style="margin:12px 0;padding:12px 14px;background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;text-align:left">';
     html += '<div style="font-size:13px;font-weight:700;color:#991B1B;margin-bottom:6px">⚠️ 还有内容未填写，无法提交：</div>';
@@ -2326,6 +2624,17 @@ function renderCompletion() {
     html += '</div></div>';
     html += '<button class="btn-submit" disabled style="opacity:0.5;cursor:not-allowed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> 请先完成所有问题</button>';
     html += '<button class="btn-submit" data-action="goBackToMissing" style="background:#F59E0B;margin-top:8px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> 返回修改</button>';
+  } else if (!allDone) {
+    // Fields complete but coverage < 90%
+    var lossGap = calcLossGap();
+    var totalLoss2 = getTotalLossHours();
+    var cov2 = getCoveragePct();
+    html += '<div style="margin:12px 0;padding:12px 14px;background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;text-align:left">';
+    html += '<div style="font-size:13px;font-weight:700;color:#991B1B;margin-bottom:6px">⚠️ 异常原因覆盖率不足，无法提交</div>';
+    html += '<div style="font-size:12px;color:#B91C1C;line-height:1.6">当前覆盖率 <strong>'+cov2.toFixed(0)+'%</strong>（已分析 '+totalLoss2.toFixed(1)+'h / 需覆盖 '+lossGap.toFixed(1)+'h），需达到 <strong>90%</strong> 以上才能提交。请补充更多损失原因。</div>';
+    html += '</div>';
+    html += '<button class="btn-submit" disabled style="opacity:0.5;cursor:not-allowed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> 请先补充异常原因至90%覆盖率</button>';
+    html += '<button class="btn-submit" data-action="goBackToMissing" style="background:#F59E0B;margin-top:8px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> 返回补充原因</button>';
   } else if (isSubmitted) {
     html += '<button class="btn-submit" disabled style="opacity:0.5;cursor:not-allowed;background:#9CA3AF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> 已提交</button>';
   } else {
@@ -2369,8 +2678,11 @@ function renderNavButtons() {
             if (f === 'productModel') { if (val === undefined || (typeof val === 'string' && val.trim() === "")) missing.push(cat.fieldLabels[f]); }
             else { if (val === undefined || val === "" || Number(val) <= 0) missing.push(cat.fieldLabels[f]); }
           });
-          var note = item.note;
-          if (note === undefined || (typeof note === 'string' && note.trim() === "")) missing.push("备注说明");
+          // For 产品类, note is auto-generated - skip manual note check
+          if (cat.name !== "产品类") {
+            var note = item.note;
+            if (note === undefined || (typeof note === 'string' && note.trim() === "")) missing.push("备注说明");
+          }
           if (missing.length > 0) _incomplete.push({ reason: item.reason, missing: missing });
         });
         if (_incomplete.length > 0) {
@@ -2416,6 +2728,17 @@ function onReasonFieldInput(el, idx, fieldName) {
   if (calcEl) {
     var h = cat.calcHours(item.data);
     calcEl.textContent = h > 0 ? h.toFixed(1) : '0';
+  }
+  // For 产品类, update auto-generated note display
+  if (cat.name === "产品类") {
+    var autoNote = generateProductNote(item);
+    var autoNoteEl = document.getElementById("reason-autonote-" + idx);
+    if (autoNoteEl) {
+      var color = REASON_COLORS[item.reason] || '#6B7280';
+      autoNoteEl.innerHTML = autoNote.trim() ? autoNote : '<span style="color:#9CA3AF;font-weight:400;">填写产品型号后自动生成</span>';
+    }
+    // Auto-save the generated note
+    item.note = autoNote;
   }
   updateCoverageDisplay();
   renderNavButtons();
@@ -2469,8 +2792,11 @@ function updateCoverageDisplay() {
           if (f === 'productModel') { if (val === undefined || (typeof val === 'string' && val.trim() === "")) missing.push(cat.fieldLabels[f]); }
           else { if (val === undefined || val === "" || Number(val) <= 0) missing.push(cat.fieldLabels[f]); }
         });
-        var note = item.note;
-        if (note === undefined || (typeof note === 'string' && note.trim() === "")) missing.push("备注说明");
+        // For 产品类, note is auto-generated - skip manual note check
+        if (cat.name !== "产品类") {
+          var note = item.note;
+          if (note === undefined || (typeof note === 'string' && note.trim() === "")) missing.push("备注说明");
+        }
         if (missing.length > 0) _incomplete.push({ reason: item.reason, missing: missing });
       });
       if (_incomplete.length > 0) {
@@ -2548,24 +2874,19 @@ function goNext() {
     }
   } else if (currentStep === visibleQs.length + 1) {
     // Reason selection step - batch add all selected reasons
-    if (isAddingMore) {
-      isAddingMore = false;
-      currentStep = visibleQs.length + 2; // go back to reason details
+    if (selectedReasons.size > 0) {
+      if (!answers.reasonList) answers.reasonList = [];
+      selectedReasons.forEach(function(r) {
+        answers.reasonList.push({ id: genReasonId(), reason: r, data: {}, note: "" });
+      });
+      selectedReasons.clear();
+    }
+    isAddingMore = false;
+    var reasonList = answers.reasonList || [];
+    if (reasonList.length === 0) {
+      currentStep = visibleQs.length + 4; // skip to completion (no reasons)
     } else {
-      // Add all selected reasons to reasonList
-      if (selectedReasons.size > 0) {
-        if (!answers.reasonList) answers.reasonList = [];
-        selectedReasons.forEach(function(r) {
-          answers.reasonList.push({ id: genReasonId(), reason: r, data: {}, note: "" });
-        });
-        selectedReasons.clear();
-      }
-      var reasonList = answers.reasonList || [];
-      if (reasonList.length === 0) {
-        currentStep = visibleQs.length + 4; // skip to completion (no reasons)
-      } else {
-        currentStep++;
-      }
+      currentStep++;
     }
   } else if (currentStep === visibleQs.length + 2) {
     // Reason details step - save form values before navigating away
@@ -2622,14 +2943,20 @@ function goBackToMissing() {
         if (fval === undefined || fval === "" || Number(fval) <= 0) hasMissing = true;
       }
     }
-    var note = item.note;
-    if (note === undefined || (typeof note === 'string' && note.trim() === "")) hasMissing = true;
+    // For 产品类, note is auto-generated - skip manual note check
+    if (cat.name !== "产品类") {
+      var note = item.note;
+      if (note === undefined || (typeof note === 'string' && note.trim() === "")) hasMissing = true;
+    }
     if (hasMissing) {
       currentStep = visibleQs.length + 2; // go to reason details step
       renderInterview();
       return;
     }
   }
+  // Fields are complete but coverage < 90% - go to more analysis step
+  currentStep = visibleQs.length + 3;
+  renderInterview();
 }
 
 function submitInterview() {
@@ -2642,7 +2969,12 @@ function submitInterview() {
   var abnormalReasons = reasonList.map(function(item) {
     var cat = findCategory(item.reason);
     var hours = cat ? cat.calcHours(item.data || {}) : 0;
-    return { reason: item.reason, hours: hours, note: item.note || "", data: item.data || {} };
+    // For 产品类, auto-generate note from product model data
+    var note = item.note || "";
+    if (cat && cat.name === "产品类") {
+      note = generateProductNote(item);
+    }
+    return { reason: item.reason, hours: hours, note: note, data: item.data || {} };
   });
   var totalLoss = getTotalLossHours();
 
@@ -3154,22 +3486,37 @@ function renderDashboard() {
     html += '<tr>'+rowHtml+'</tr>';
     if (expanded && r.abnormalReasons.length > 0) {
       html += '<tr class="detail-row"><td colspan="'+detailColspan+'"><div class="detail-content"><div class="detail-content-title">异常原因明细</div><div class="detail-reasons">';
+      // Group 产品类 entries by reason for combined display
+      var productGroups = groupProductReasons(r.abnormalReasons);
+      var shownProductReasons = {};
       r.abnormalReasons.forEach(a => {
         const color = REASON_COLORS[a.reason] || "#6B7280";
-        html += '<div class="detail-reason-tag" style="background:'+color+'10;border-color:'+color+'30;flex-direction:column;align-items:flex-start;gap:4px;padding:8px 12px">';
-        html += '<div style="display:flex;align-items:center;gap:6px">'+getReasonIcon(a.reason).replace('stroke="currentColor"','stroke="'+color+'"')+'<span class="detail-reason-name">'+a.reason+'</span><span class="detail-reason-hours" style="color:'+color+'">'+a.hours.toFixed(1)+'h</span></div>';
-        // Show data breakdown if available
-        if (a.data && Object.keys(a.data).length > 0) {
-          var breakdownParts = [];
-          if (a.data.downtimeHours !== undefined) breakdownParts.push('停机'+a.data.downtimeHours+'h × '+a.data.affectedPeople+'人');
-          if (a.data.hoursPerPerson !== undefined) breakdownParts.push((a.data.productModel||'')+' '+a.data.affectedPeople+'人×'+a.data.hoursPerPerson+'h');
-          if (a.data.impactHours !== undefined) breakdownParts.push(a.data.impactHours+'h × '+(a.data.affectedPeople||0)+'人');
-          if (breakdownParts.length > 0) {
-            html += '<div style="font-size:11px;color:#6B7280">'+breakdownParts.join(' | ')+'</div>';
+        const cat = findCategory(a.reason);
+        // For 产品类, show grouped display (only once per reason)
+        if (cat && cat.name === "产品类") {
+          if (shownProductReasons[a.reason]) return; // already shown
+          shownProductReasons[a.reason] = true;
+          var pg = productGroups[a.reason];
+          html += '<div class="detail-reason-tag" style="background:'+color+'10;border-color:'+color+'30;flex-direction:column;align-items:flex-start;gap:4px;padding:8px 12px">';
+          html += '<div style="display:flex;align-items:center;gap:6px">'+getReasonIcon(a.reason).replace('stroke="currentColor"','stroke="'+color+'"')+'<span class="detail-reason-name">'+a.reason+'</span><span class="detail-reason-hours" style="color:'+color+'">'+pg.totalHours.toFixed(1)+'h</span></div>';
+          html += '<div style="font-size:12px;color:#374151;line-height:1.4;font-weight:500">'+a.reason+'('+pg.totalHours.toFixed(1)+'h)-'+pg.parts.join('，')+'</div>';
+          html += '</div>';
+        } else {
+          // Non-产品类: display individually
+          html += '<div class="detail-reason-tag" style="background:'+color+'10;border-color:'+color+'30;flex-direction:column;align-items:flex-start;gap:4px;padding:8px 12px">';
+          html += '<div style="display:flex;align-items:center;gap:6px">'+getReasonIcon(a.reason).replace('stroke="currentColor"','stroke="'+color+'"')+'<span class="detail-reason-name">'+a.reason+'</span><span class="detail-reason-hours" style="color:'+color+'">'+a.hours.toFixed(1)+'h</span></div>';
+          // Show data breakdown if available
+          if (a.data && Object.keys(a.data).length > 0) {
+            var breakdownParts = [];
+            if (a.data.downtimeHours !== undefined) breakdownParts.push('停机'+a.data.downtimeHours+'h × '+a.data.affectedPeople+'人');
+            if (a.data.impactHours !== undefined) breakdownParts.push(a.data.impactHours+'h × '+(a.data.affectedPeople||0)+'人');
+            if (breakdownParts.length > 0) {
+              html += '<div style="font-size:11px;color:#6B7280">'+breakdownParts.join(' | ')+'</div>';
+            }
           }
+          if (a.note) { html += '<div style="font-size:12px;color:#6B7280;line-height:1.4;border-top:1px solid '+color+'20;padding-top:4px;width:100%">'+a.note+'</div>'; }
+          html += '</div>';
         }
-        if (a.note) { html += '<div style="font-size:12px;color:#6B7280;line-height:1.4;border-top:1px solid '+color+'20;padding-top:4px;width:100%">'+a.note+'</div>'; }
-        html += '</div>';
       });
       html += '</div></div></td></tr>';
     }
