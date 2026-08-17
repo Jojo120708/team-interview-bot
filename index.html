@@ -719,9 +719,22 @@ function retryPendingUploads() {
   });
 }
 
+// Periodic retry: check pending queue every 60 seconds
+setInterval(function() {
+  var queue = getPendingUploads();
+  if (queue.length > 0) {
+    console.log("[Cloud] Periodic retry: " + queue.length + " pending upload(s)");
+    queue.forEach(function(item, idx) {
+      setTimeout(function() {
+        doCloudUpload(item.record, 0, true);
+      }, idx * 5000); // stagger retries 5s apart
+    });
+  }
+}, 60000);
+
 // Core upload with retry + verification
 function doCloudUpload(record, attempt, isRetry) {
-  var MAX_RETRIES = 3;
+  var MAX_RETRIES = 5;
   if (attempt >= MAX_RETRIES) {
     // All retries exhausted - save to pending queue
     enqueueUpload(record);
