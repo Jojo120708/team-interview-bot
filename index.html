@@ -1541,48 +1541,124 @@ function formatReasonDetail(a) {
   return detail;
 }
 
+// ==================== TEMPLATE XLSX EXPORT ====================
+// Template layout: 13 base cols (A-M, merged 2 rows) + 7 reason groups x 3 cols (N-AH)
+var EXPORT_REASON_GROUPS = ["模具原因","设备原因","工艺原因","品质返工","新品调试","换膜原因","其他原因"];
+
+function loadSheetJS(callback) {
+  if (window.XLSX) return callback();
+  var s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  s.onload = callback;
+  s.onerror = function() { callback(true); };
+  document.head.appendChild(s);
+}
+
+// Build one data row (34 cols) from a record
+function buildTemplateRow(r) {
+  var lossHours = (r.abnormalReasons || []).reduce(function(s, a) { return s + (a.hours || 0); }, 0);
+  var row = new Array(34).fill('');
+  row[0] = r.date || '';
+  row[1] = r.submitTime || '';
+  row[2] = r.teamName || '';
+  if (r.isDLE) {
+    var dle = r.dle || 0;
+    var eh = r.effectiveHours || 0;
+    var ah = r.actualHours || 0;
+    var dleThr = 1.00;
+    row[3] = 'DLE分析';
+    row[6] = eh;          // 计划工时/有效工时
+    row[7] = ah;          // 实际工时(h)
+    row[8] = Number((dle * 100).toFixed(1)); // 达成率/DLE(%)
+    row[10] = Number(lossHours.toFixed(1));  // 损失工时
+    row[11] = '—';        // 产值状态
+    row[12] = dle < dleThr ? 'DLE需分析' : 'DLE正常'; // 效率状态
+  } else {
+    var compRate = r.targetValue > 0 ? (r.actualValue / r.targetValue) * 100 : 0;
+    var isLowTarget = (r.targetValue || 0) < 1;
+    var plannedPH = r.standardHours > 0 ? r.targetValue * 10000 / r.standardHours : 0;
+    var actualPH = r.actualHours > 0 ? r.actualValue * 10000 / r.actualHours : 0;
+    row[3] = '人时产值分析';
+    row[4] = r.targetValue || '';   // 目标产值
+    row[5] = r.actualValue || '';   // 实际产值
+    row[6] = r.standardHours || ''; // 计划工时
+    row[7] = r.actualHours || '';   // 实际工时(h)
+    row[8] = Number(compRate.toFixed(1)); // 达成率
+    row[9] = Number((r.actualPH || actualPH).toFixed(1)); // 人时产值
+    row[10] = Number(lossHours.toFixed(1));
+    row[11] = isLowTarget ? '—' : (r.actualValue >= r.targetValue ? '达标' : '未达标');
+    row[12] = isLowTarget ? '需分析' : (actualPH >= plannedPH ? '达标' : '未达标');
+  }
+  // Reason groups: cols 13..33, 3 per group (影响人数, 影响总工时, 具体原因说明)
+  EXPORT_REASON_GROUPS.forEach(function(gname, gi) {
+    var entries = (r.abnormalReasons || []).filter(function(a) { return a.reason === gname; });
+    if (entries.length === 0) return;
+    var people = 0, hours = 0, notes = [];
+    entries.forEach(function(a) {
+      var d = a.data || {};
+      people += Number(d.affectedPeople || 0);
+      hours += a.hours || 0;
+      if (a.note) notes.push(a.note);
+    });
+    row[13 + gi*3] = people || '';
+    row[14 + gi*3] = hours ? Number(hours.toFixed(1)) : '';
+    row[15 + gi*3] = notes.join('；');
+  });
+  return row;
+}
+
+function exportTemplateXLSX(records, filename) {
+  loadSheetJS(function(failed) {
+    var header1 = ['日期','提交时间','班组','分析模式','目标产值','实际产值','计划工时/有效工时','实际工时(h)','达成率/DLE(%)','人时产值','损失工时','产值状态','效率状态'];
+    var header2 = new Array(13).fill('');
+    EXPORT_REASON_GROUPS.forEach(function(g) {
+      header1.push(g, '', '');
+      header2.push('影响人数', '影响总工时', '具体原因说明');
+    });
+    var dataRows = records.map(buildTemplateRow);
+
+    if (failed || !window.XLSX) {
+      // Fallback: CSV with same 2-row header
+      var csv = '\uFEFF' + header1.join(',') + '\n' + header2.join(',') + '\n' +
+        dataRows.map(function(row) {
+          return row.map(function(c) {
+            var s = String(c);
+            if (s.indexOf(',') >= 0 || s.indexOf('"') >= 0 || s.indexOf('\n') >= 0) return '"' + s.replace(/"/g, '""') + '"';
+            return s;
+          }).join(',');
+        }).join('\n');
+      var blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = filename.replace('.xlsx', '.csv');
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      return;
+    }
+
+    var aoa = [header1, header2].concat(dataRows);
+    var ws = XLSX.utils.aoa_to_sheet(aoa);
+    // Merges: A1:A2..M1:M2 (base cols), then each group header spans 3 cols in row 1
+    var merges = [];
+    for (var c = 0; c < 13; c++) merges.push({ s: { r: 0, c: c }, e: { r: 1, c: c } });
+    for (var g = 0; g < 7; g++) merges.push({ s: { r: 0, c: 13 + g*3 }, e: { r: 0, c: 15 + g*3 } });
+    ws['!merges'] = merges;
+    // Column widths
+    var widths = [];
+    for (var w = 0; w < 34; w++) widths.push({ wch: w < 13 ? 12 : 14 });
+    ws['!cols'] = widths;
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+    XLSX.writeFile(wb, filename);
+  });
+}
+
 function exportCloudCSV() {
   if (cloudRecordsCache.length === 0) { alert('暂无数据可导出'); return; }
-  var headers = ['日期','提交时间','班组','分析模式','目标产值','实际产值','达成率/DLE(%)','计划工时/有效工时','实际工时(h)','人时产值','损失工时','产值状态','效率状态','异常原因'];
-  var rows = cloudRecordsCache.map(function(r) {
-    var lossHours = (r.abnormalReasons || []).reduce(function(s, a) { return s + (a.hours || 0); }, 0);
-    var reasons = (r.abnormalReasons || []).map(function(a) {
-      var s = a.reason + '(' + (a.hours||0).toFixed(1) + 'h)';
-      var det = formatReasonDetail(a);
-      if (det) s += '[' + det + ']';
-      if (a.note) s += ':' + a.note;
-      return s;
-    }).join('；');
-
-    if (r.isDLE) {
-      var dle = r.dle || 0;
-      var dlePct = (dle * 100).toFixed(1);
-      var eh = r.effectiveHours || 0;
-      var ah = r.actualHours || 0;
-      var dleThr = (r.teamName === "二部二课") ? 1.00 : 1.00;
-      var effStatus = dle < dleThr ? 'DLE需分析' : 'DLE正常';
-      return [r.date||'', r.submitTime||'', r.teamName||'', 'DLE分析', '', '', dlePct, eh, ah, '', lossHours.toFixed(1), '—', effStatus, reasons].join(',');
-    } else {
-      var compRate = r.targetValue > 0 ? (r.actualValue / r.targetValue * 100).toFixed(1) : '0.0';
-      var isLowTarget = (r.targetValue || 0) < 1;
-      var outputStatus = isLowTarget ? '—' : (r.actualValue >= r.targetValue ? '达标' : '未达标');
-      var plannedPH = r.standardHours > 0 ? r.targetValue * 10000 / r.standardHours : 0;
-      var actualPH = r.actualHours > 0 ? r.actualValue * 10000 / r.actualHours : 0;
-      var hourDev = r.actualHours - r.standardHours;
-      var efficiencyStatus = isLowTarget ? (hourDev > 0 ? '需分析' : hourDev === 0 ? '工时持平' : '正常') : (actualPH >= plannedPH ? '达标' : '未达标');
-      return [r.date||'', r.submitTime||'', r.teamName||'', '人时产值分析', r.targetValue||0, r.actualValue||0, compRate, r.standardHours||0, r.actualHours||0, r.actualPH||'', lossHours.toFixed(1), outputStatus, efficiencyStatus, reasons].join(',');
-    }
-  });
-  var csv = '\uFEFF' + headers.join(',') + '\n' + rows.join('\n');
-  var blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
-  a.href = url;
-  a.download = '云端数据_' + new Date().toISOString().slice(0,10) + '.csv';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  exportTemplateXLSX(cloudRecordsCache.slice().sort(function(a, b) { return (a.date || '').localeCompare(b.date || '') || (a.teamName || '').localeCompare(b.teamName || ''); }), '云端数据_' + new Date().toISOString().slice(0,10) + '.xlsx');
 }
 
 function getISOWeek(dateStr) {
@@ -3265,84 +3341,7 @@ function exportData() {
     alert("暂无数据可导出");
     return;
   }
-  var BOM = "\uFEFF";
-  var headers = ["班组","提交时间","日期","分析模式","目标产值(万元)","实际产值(万元)","达成率/DLE(%)","计划工时/有效工时(h)","实际工时(h)","偏差(h)","损失工时(h)","差距覆盖(%)","产值状态","效率状态","异常原因"];
-  var rows = cloudDashboardRecords.map(function(r) {
-    var lossHours = (r.abnormalReasons || []).reduce(function(s, a) { return s + a.hours; }, 0);
-    var reasons = (r.abnormalReasons || []).map(function(a) {
-      var s = a.reason + "(" + a.hours.toFixed(1) + "h)";
-      var det = formatReasonDetail(a);
-      if (det) s += "[" + det + "]";
-      if (a.note) s += ":" + a.note;
-      return s;
-    }).join("；");
-
-    if (r.isDLE) {
-      // DLE mode record
-      var dle = r.dle || 0;
-      var dlePct = (dle * 100).toFixed(1);
-      var eh = r.effectiveHours || 0;
-      var ah = r.actualHours || 0;
-      var rLossGap = r.lossGap || (ah - eh);
-      var coverage = r.coverage != null ? r.coverage : (rLossGap > 0 ? (lossHours / rLossGap) * 100 : 100);
-      var dleThr = (r.teamName === "二部二课") ? 1.00 : 1.00;
-      var effStatus = dle < dleThr ? "DLE需分析" : "DLE正常";
-      return [
-        r.teamName || "",
-        r.submitTime || "",
-        r.date || "",
-        "DLE分析",
-        "",
-        "",
-        dlePct,
-        eh,
-        ah,
-        "",
-        lossHours.toFixed(1),
-        coverage.toFixed(0),
-        "—",
-        effStatus,
-        reasons
-      ];
-    } else {
-      // Normal mode record
-      var compRate = pctNum(r.actualValue, r.targetValue);
-      var hourDev = r.actualHours - r.standardHours;
-      var coverage = r.coverage != null ? r.coverage : (lossHours > 0 ? 100 : 0);
-      var isLowTarget = (r.targetValue || 0) < 1;
-      var outputStatus = isLowTarget ? "—" : (compRate >= 100 ? "超额完成" : compRate >= 90 ? "基本达标" : compRate >= 80 ? "轻度未达标" : "严重未达标");
-      var plannedPH = r.standardHours > 0 ? r.targetValue * 10000 / r.standardHours : 0;
-      var actualPH = r.actualHours > 0 ? r.actualValue * 10000 / r.actualHours : 0;
-      var efficiencyStatus = isLowTarget ? (hourDev > 0 ? "需分析" : hourDev === 0 ? "工时持平" : "正常") : (actualPH >= plannedPH ? "达标" : "未达标");
-      return [
-        r.teamName || "",
-        r.submitTime || "",
-        r.date || "",
-        "人时产值分析",
-        r.targetValue != null ? r.targetValue : "",
-        r.actualValue != null ? r.actualValue : "",
-        compRate.toFixed(1),
-        r.standardHours != null ? r.standardHours : "",
-        r.actualHours != null ? r.actualHours : "",
-        hourDev,
-        lossHours.toFixed(1),
-        coverage.toFixed(0),
-        outputStatus,
-        efficiencyStatus,
-        reasons
-      ];
-    }
-  });
-  var csv = BOM + headers.join(",") + "\n" + rows.map(function(row) {
-    return row.map(function(cell) {
-      var s = String(cell);
-      if (s.indexOf(",") >= 0 || s.indexOf('"') >= 0 || s.indexOf("\n") >= 0) {
-        return '"' + s.replace(/"/g, '""') + '"';
-      }
-      return s;
-    }).join(",");
-  }).join("\n");
-  showExportModal(csv);
+  exportTemplateXLSX(cloudDashboardRecords.slice().sort(function(a, b) { return (a.date || '').localeCompare(b.date || '') || (a.teamName || '').localeCompare(b.teamName || ''); }), '看板数据_' + new Date().toISOString().slice(0,10) + '.xlsx');
 }
 function showExportModal(csv) {
   // Remove existing modal if any
