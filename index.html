@@ -1542,8 +1542,17 @@ function formatReasonDetail(a) {
 }
 
 // ==================== TEMPLATE XLSX EXPORT ====================
-// Template layout: 13 base cols (A-M, merged 2 rows) + 7 reason groups x 3 cols (N-AH)
-var EXPORT_REASON_GROUPS = ["模具原因","设备原因","工艺原因","品质返工","新品调试","换膜原因","其他原因"];
+// Template layout: 13 base cols (A-M, merged 2 rows) + reason groups (N-AJ, 36 cols total)
+// 品质返工/新品调试 have 4 cols (产品型号+影响人数+影响总工时+具体原因说明), others 3 cols
+var EXPORT_REASON_GROUPS = [
+  { name: "品质返工", cols: ['产品型号','影响人数','影响总工时','具体原因说明'] },
+  { name: "新品调试", cols: ['产品型号','影响人数','影响总工时','具体原因说明'] },
+  { name: "模具原因", cols: ['影响人数','影响总工时','具体原因说明'] },
+  { name: "设备原因", cols: ['影响人数','影响总工时','具体原因说明'] },
+  { name: "工艺原因", cols: ['影响人数','影响总工时','具体原因说明'] },
+  { name: "换膜原因", cols: ['影响人数','影响总工时','具体原因说明'] },
+  { name: "其他原因", cols: ['影响人数','影响总工时','具体原因说明'] }
+];
 
 function loadSheetJS(callback) {
   if (window.XLSX) return callback();
@@ -1554,10 +1563,10 @@ function loadSheetJS(callback) {
   document.head.appendChild(s);
 }
 
-// Build one data row (34 cols) from a record
+// Build one data row (36 cols) from a record
 function buildTemplateRow(r) {
   var lossHours = (r.abnormalReasons || []).reduce(function(s, a) { return s + (a.hours || 0); }, 0);
-  var row = new Array(34).fill('');
+  var row = new Array(36).fill('');
   row[0] = r.date || '';
   row[1] = r.submitTime || '';
   row[2] = r.teamName || '';
@@ -1589,20 +1598,29 @@ function buildTemplateRow(r) {
     row[11] = isLowTarget ? '—' : (r.actualValue >= r.targetValue ? '达标' : '未达标');
     row[12] = isLowTarget ? '需分析' : (actualPH >= plannedPH ? '达标' : '未达标');
   }
-  // Reason groups: cols 13..33, 3 per group (影响人数, 影响总工时, 具体原因说明)
-  EXPORT_REASON_GROUPS.forEach(function(gname, gi) {
-    var entries = (r.abnormalReasons || []).filter(function(a) { return a.reason === gname; });
-    if (entries.length === 0) return;
-    var people = 0, hours = 0, notes = [];
-    entries.forEach(function(a) {
-      var d = a.data || {};
-      people += Number(d.affectedPeople || 0);
-      hours += a.hours || 0;
-      if (a.note) notes.push(a.note);
-    });
-    row[13 + gi*3] = people || '';
-    row[14 + gi*3] = hours ? Number(hours.toFixed(1)) : '';
-    row[15 + gi*3] = notes.join('；');
+  // Reason groups starting col 13
+  var col = 13;
+  EXPORT_REASON_GROUPS.forEach(function(g) {
+    var entries = (r.abnormalReasons || []).filter(function(a) { return a.reason === g.name; });
+    if (entries.length > 0) {
+      var people = 0, hours = 0, notes = [], models = [];
+      entries.forEach(function(a) {
+        var d = a.data || {};
+        people += Number(d.affectedPeople || 0);
+        hours += a.hours || 0;
+        if (a.note) notes.push(a.note);
+        if (d.productModel) models.push(d.productModel);
+      });
+      var i = 0;
+      if (g.cols[0] === '产品型号') {
+        row[col] = models.join('，');
+        i = 1;
+      }
+      row[col + i] = people || ''; i++;
+      row[col + i] = hours ? Number(hours.toFixed(1)) : ''; i++;
+      row[col + i] = notes.join('；');
+    }
+    col += g.cols.length;
   });
   return row;
 }
@@ -1611,9 +1629,12 @@ function exportTemplateXLSX(records, filename) {
   loadSheetJS(function(failed) {
     var header1 = ['日期','提交时间','班组','分析模式','目标产值','实际产值','计划工时/有效工时','实际工时(h)','达成率/DLE(%)','人时产值','损失工时','产值状态','效率状态'];
     var header2 = new Array(13).fill('');
+    var totalCols = 13;
     EXPORT_REASON_GROUPS.forEach(function(g) {
-      header1.push(g, '', '');
-      header2.push('影响人数', '影响总工时', '具体原因说明');
+      header1.push(g.name);
+      for (var p = 1; p < g.cols.length; p++) header1.push('');
+      header2 = header2.concat(g.cols);
+      totalCols += g.cols.length;
     });
     var dataRows = records.map(buildTemplateRow);
 
@@ -1641,14 +1662,18 @@ function exportTemplateXLSX(records, filename) {
 
     var aoa = [header1, header2].concat(dataRows);
     var ws = XLSX.utils.aoa_to_sheet(aoa);
-    // Merges: A1:A2..M1:M2 (base cols), then each group header spans 3 cols in row 1
+    // Merges: A1:A2..M1:M2 (base cols), then each group header spans its cols in row 1
     var merges = [];
     for (var c = 0; c < 13; c++) merges.push({ s: { r: 0, c: c }, e: { r: 1, c: c } });
-    for (var g = 0; g < 7; g++) merges.push({ s: { r: 0, c: 13 + g*3 }, e: { r: 0, c: 15 + g*3 } });
+    var colStart = 13;
+    EXPORT_REASON_GROUPS.forEach(function(g) {
+      merges.push({ s: { r: 0, c: colStart }, e: { r: 0, c: colStart + g.cols.length - 1 } });
+      colStart += g.cols.length;
+    });
     ws['!merges'] = merges;
     // Column widths
     var widths = [];
-    for (var w = 0; w < 34; w++) widths.push({ wch: w < 13 ? 12 : 14 });
+    for (var w = 0; w < totalCols; w++) widths.push({ wch: w < 13 ? 12 : 14 });
     ws['!cols'] = widths;
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
