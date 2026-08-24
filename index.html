@@ -2406,20 +2406,12 @@ function renderReasonDetails() {
         html += '</div>';
       });
 
-      // Note: for 产品类, auto-generate from product model data; for others, show textarea
-      if (cat.name === "产品类") {
-        var autoNote = generateProductNote(entry.item);
-        html += '<div style="display:flex;align-items:flex-start;gap:8px;margin-top:4px">';
-        html += '<label style="font-size:13px;color:#6B7280;min-width:120px;padding-top:8px">备注说明</label>';
-        html += '<div id="reason-autonote-'+idx+'" style="font-size:13px;color:'+color+';font-weight:500;padding:8px 12px;background:'+color+'10;border-radius:8px;min-height:36px;line-height:1.5;">'+(autoNote.trim() ? autoNote : '<span style="color:#9CA3AF;font-weight:400;">填写产品型号后自动生成</span>')+'</div>';
-        html += '</div>';
-      } else {
-        var notePh = (cat.notePlaceholders && cat.notePlaceholders[r]) || "请说明具体原因";
-        html += '<div style="display:flex;align-items:flex-start;gap:8px;margin-top:4px">';
-        html += '<label style="font-size:13px;color:#6B7280;min-width:120px;padding-top:8px">备注说明</label>';
-        html += '<textarea class="reason-detail-note" placeholder="'+notePh+'" style="--reason-color:'+color+'" id="reason-note-'+idx+'" data-idx="'+idx+'">'+noteVal+'</textarea>';
-        html += '</div>';
-      }
+      // Note: manual textarea for all categories including 产品类
+      var notePh = (cat.notePlaceholders && cat.notePlaceholders[r]) || "请说明具体原因";
+      html += '<div style="display:flex;align-items:flex-start;gap:8px;margin-top:4px">';
+      html += '<label style="font-size:13px;color:#6B7280;min-width:120px;padding-top:8px">备注说明</label>';
+      html += '<textarea class="reason-detail-note" placeholder="'+notePh+'" style="--reason-color:'+color+'" id="reason-note-'+idx+'" data-idx="'+idx+'">'+noteVal+'</textarea>';
+      html += '</div>';
 
       html += '</div>';
     });
@@ -2443,8 +2435,8 @@ function renderReasonDetails() {
         if (f === 'productModel') { if (val === undefined || (typeof val === 'string' && val.trim() === "")) missing.push(cat.fieldLabels[f]); }
         else { if (val === undefined || val === "" || Number(val) <= 0) missing.push(cat.fieldLabels[f]); }
       });
-      // For 产品类, note is auto-generated - skip manual note check
-      if (cat.name !== "产品类") {
+      // Note is required for all categories (manual input)
+      {
         var note = item.note;
         if (note === undefined || (typeof note === 'string' && note.trim() === "")) missing.push("备注说明");
       }
@@ -2655,8 +2647,8 @@ function isFieldsComplete() {
         if (fval === undefined || fval === "" || Number(fval) <= 0) return false;
       }
     }
-    // For 产品类, note is auto-generated from product model data - skip manual note check
-    if (cat.name !== "产品类") {
+    // Note is required for all categories (manual input)
+    {
       var note = item.note;
       if (note === undefined || (typeof note === 'string' && note.trim() === "")) return false;
     }
@@ -2770,8 +2762,8 @@ function renderCompletion() {
           if (mfval === undefined || mfval === "" || Number(mfval) <= 0) missingList.push(mitem.reason + ' - ' + (mcat.fieldLabels[mf] || mf));
         }
       }
-      // For 产品类, note is auto-generated - skip manual note check
-      if (mcat.name !== "产品类") {
+      // Note is required for all categories (manual input)
+      {
         var mnote = mitem.note;
         if (mnote === undefined || (typeof mnote === 'string' && mnote.trim() === "")) missingList.push(mitem.reason + ' - 备注说明');
       }
@@ -2839,8 +2831,8 @@ function renderNavButtons() {
             if (f === 'productModel') { if (val === undefined || (typeof val === 'string' && val.trim() === "")) missing.push(cat.fieldLabels[f]); }
             else { if (val === undefined || val === "" || Number(val) <= 0) missing.push(cat.fieldLabels[f]); }
           });
-          // For 产品类, note is auto-generated - skip manual note check
-          if (cat.name !== "产品类") {
+          // Note is required for all categories (manual input)
+          {
             var note = item.note;
             if (note === undefined || (typeof note === 'string' && note.trim() === "")) missing.push("备注说明");
           }
@@ -2889,17 +2881,6 @@ function onReasonFieldInput(el, idx, fieldName) {
   if (calcEl) {
     var h = cat.calcHours(item.data);
     calcEl.textContent = h > 0 ? h.toFixed(1) : '0';
-  }
-  // For 产品类, update auto-generated note display
-  if (cat.name === "产品类") {
-    var autoNote = generateProductNote(item);
-    var autoNoteEl = document.getElementById("reason-autonote-" + idx);
-    if (autoNoteEl) {
-      var color = REASON_COLORS[item.reason] || '#6B7280';
-      autoNoteEl.innerHTML = autoNote.trim() ? autoNote : '<span style="color:#9CA3AF;font-weight:400;">填写产品型号后自动生成</span>';
-    }
-    // Auto-save the generated note
-    item.note = autoNote;
   }
   updateCoverageDisplay();
   renderNavButtons();
@@ -2953,8 +2934,8 @@ function updateCoverageDisplay() {
           if (f === 'productModel') { if (val === undefined || (typeof val === 'string' && val.trim() === "")) missing.push(cat.fieldLabels[f]); }
           else { if (val === undefined || val === "" || Number(val) <= 0) missing.push(cat.fieldLabels[f]); }
         });
-        // For 产品类, note is auto-generated - skip manual note check
-        if (cat.name !== "产品类") {
+        // Note is required for all categories (manual input)
+        {
           var note = item.note;
           if (note === undefined || (typeof note === 'string' && note.trim() === "")) missing.push("备注说明");
         }
@@ -3104,8 +3085,8 @@ function goBackToMissing() {
         if (fval === undefined || fval === "" || Number(fval) <= 0) hasMissing = true;
       }
     }
-    // For 产品类, note is auto-generated - skip manual note check
-    if (cat.name !== "产品类") {
+    // Note is required for all categories (manual input)
+    {
       var note = item.note;
       if (note === undefined || (typeof note === 'string' && note.trim() === "")) hasMissing = true;
     }
@@ -3135,11 +3116,7 @@ function submitInterview() {
   var abnormalReasons = reasonList.map(function(item) {
     var cat = findCategory(item.reason);
     var hours = cat ? cat.calcHours(item.data || {}) : 0;
-    // For 产品类, auto-generate note from product model data
     var note = item.note || "";
-    if (cat && cat.name === "产品类") {
-      note = generateProductNote(item);
-    }
     return { reason: item.reason, hours: hours, note: note, data: item.data || {} };
   });
   var totalLoss = getTotalLossHours();
