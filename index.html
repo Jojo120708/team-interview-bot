@@ -1520,12 +1520,39 @@ function deleteCloudRecord(indexStr) {
   xhr.send(JSON.stringify({ records: newRecords }));
 }
 
+function formatReasonDetail(a) {
+  var d = a.data || {};
+  var detail = '';
+  if (d.downtimeHours != null && d.downtimeHours !== '') {
+    detail += '停机' + d.downtimeHours + 'h';
+  }
+  if (d.hoursPerPerson != null && d.hoursPerPerson !== '') {
+    detail += (detail ? '，' : '') + '每人' + d.hoursPerPerson + 'h';
+  }
+  if (d.impactHours != null && d.impactHours !== '') {
+    detail += (detail ? '，' : '') + '每人' + d.impactHours + 'h';
+  }
+  if (d.affectedPeople != null && d.affectedPeople !== '') {
+    detail += (detail ? '，' : '') + d.affectedPeople + '人';
+  }
+  if (d.productModel) {
+    detail += (detail ? '，' : '') + d.productModel;
+  }
+  return detail;
+}
+
 function exportCloudCSV() {
   if (cloudRecordsCache.length === 0) { alert('暂无数据可导出'); return; }
   var headers = ['日期','提交时间','班组','分析模式','目标产值','实际产值','达成率/DLE(%)','计划工时/有效工时','实际工时(h)','人时产值','损失工时','产值状态','效率状态','异常原因'];
   var rows = cloudRecordsCache.map(function(r) {
     var lossHours = (r.abnormalReasons || []).reduce(function(s, a) { return s + (a.hours || 0); }, 0);
-    var reasons = (r.abnormalReasons || []).map(function(a) { return a.reason + '(' + (a.hours||0).toFixed(1) + 'h)' + (a.note ? ':' + a.note : ''); }).join('；');
+    var reasons = (r.abnormalReasons || []).map(function(a) {
+      var s = a.reason + '(' + (a.hours||0).toFixed(1) + 'h)';
+      var det = formatReasonDetail(a);
+      if (det) s += '[' + det + ']';
+      if (a.note) s += ':' + a.note;
+      return s;
+    }).join('；');
 
     if (r.isDLE) {
       var dle = r.dle || 0;
@@ -3242,7 +3269,13 @@ function exportData() {
   var headers = ["班组","提交时间","日期","分析模式","目标产值(万元)","实际产值(万元)","达成率/DLE(%)","计划工时/有效工时(h)","实际工时(h)","偏差(h)","损失工时(h)","差距覆盖(%)","产值状态","效率状态","异常原因"];
   var rows = cloudDashboardRecords.map(function(r) {
     var lossHours = (r.abnormalReasons || []).reduce(function(s, a) { return s + a.hours; }, 0);
-    var reasons = (r.abnormalReasons || []).map(function(a) { return a.reason + "(" + a.hours.toFixed(1) + "h)" + (a.note ? ":" + a.note : ""); }).join("；");
+    var reasons = (r.abnormalReasons || []).map(function(a) {
+      var s = a.reason + "(" + a.hours.toFixed(1) + "h)";
+      var det = formatReasonDetail(a);
+      if (det) s += "[" + det + "]";
+      if (a.note) s += ":" + a.note;
+      return s;
+    }).join("；");
 
     if (r.isDLE) {
       // DLE mode record
