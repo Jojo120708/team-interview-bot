@@ -867,6 +867,10 @@ function verifyUpload(record, attempt, isRetry) {
 
 function uploadRecordToCloud(record) {
   if (!JSONBIN_API_KEY || !JSONBIN_BIN_ID) return;
+  // Enqueue IMMEDIATELY as safety net: if the page is closed before the upload
+  // fires (mobile users often close right after submitting), the record stays
+  // in the pending queue and is retried on next page load.
+  enqueueUpload(record);
   doCloudUpload(record, 0, false);
 }
 
