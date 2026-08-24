@@ -1100,7 +1100,7 @@ function sendDingTalkNotification(record) {
 
   if (record.isDLE) {
     // DLE mode notification
-    var dleThr = record.teamName === "二部二课" ? 0.80 : 0.75;
+    var dleThr = record.teamName === "二部二课" ? 1.00 : 1.00;
     var dle = record.dle || 0;
     var dleOk = dle >= dleThr;
     var statusEmoji2 = dleOk ? '&#x2705;' : '&#x274C;';
@@ -1532,7 +1532,7 @@ function exportCloudCSV() {
       var dlePct = (dle * 100).toFixed(1);
       var eh = r.effectiveHours || 0;
       var ah = r.actualHours || 0;
-      var dleThr = (r.teamName === "二部二课") ? 0.80 : 0.75;
+      var dleThr = (r.teamName === "二部二课") ? 1.00 : 1.00;
       var effStatus = dle < dleThr ? 'DLE需分析' : 'DLE正常';
       return [r.date||'', r.submitTime||'', r.teamName||'', 'DLE分析', '', '', dlePct, eh, ah, '', lossHours.toFixed(1), '—', effStatus, reasons].join(',');
     } else {
@@ -1683,7 +1683,7 @@ function aggregateRecords(records, dimension) {
       var eh = g.effectiveHours || 0;
       var ah = g.actualHours || 0;
       g.dle = ah > 0 ? eh / ah : 0;
-      var dleThr = g.teamName === "二部二课" ? 0.80 : 0.75;
+      var dleThr = g.teamName === "二部二课" ? 1.00 : 1.00;
       var expectedHours = dleThr > 0 ? eh / dleThr : ah;
       g.lossGap = ah - expectedHours;
       var totalLoss = g.abnormalReasons.reduce(function(s, a) { return s + a.hours; }, 0);
@@ -1809,8 +1809,8 @@ function calcDLE() {
   return eh / ah;
 }
 function getDLEThreshold() {
-  if (answers.teamName === "二部二课") return 0.80;
-  return 0.75; // default for all other teams
+  if (answers.teamName === "二部二课") return 1.00;
+  return 1.00; // DLE threshold is 100% for all teams
 }
 function fmtH(n) {
   return n.toFixed(1) + "h";
@@ -2236,7 +2236,7 @@ function renderReasonDetails() {
     var cov = dleHoursGap > 0 ? (totalLoss / dleHoursGap) * 100 : 100;
     var covColor = cov >= 90 ? '#10B981' : cov >= 60 ? '#F59E0B' : '#EF4444';
     html += '<div class="analysis-grid">';
-    html += '<div class="analysis-item"><div class="analysis-item-label">计划DLE</div><div class="analysis-item-value" style="color:#4F46E5">'+thrPct+'%</div><div class="analysis-item-sub">'+(answers.teamName === "二部二课" ? "二部二课标准" : "通用标准")+'</div></div>';
+    html += '<div class="analysis-item"><div class="analysis-item-label">计划DLE</div><div class="analysis-item-value" style="color:#4F46E5">'+thrPct+'%</div><div class="analysis-item-sub">'+(answers.teamName === "二部二课" ? "标准100%" : "标准100%")+'</div></div>';
     html += '<div class="analysis-item"><div class="analysis-item-label">实际DLE</div><div class="analysis-item-value" style="color:'+(dle<thr?'#EF4444':'#10B981')+'">'+dlePct+'%</div><div class="analysis-item-sub">有效工时/实际工时</div></div>';
     html += '</div>';
     html += '<div style="padding:10px 14px;background:#FEF2F2;border-radius:10px;margin-bottom:12px;font-size:13px;color:#991B1B">工时差距：<strong>'+dleHoursGap.toFixed(1)+'</strong> 小时（实际工时 '+ah+'h − 有效工时 '+eh+'h / '+thrPct+'%）</div>';
@@ -2417,7 +2417,7 @@ function renderMoreAnalysis() {
     var expectedHours = thr > 0 ? eh / thr : ah;
     var dleHoursGap = ah - expectedHours;
     html += '<div class="analysis-grid">';
-    html += '<div class="analysis-item"><div class="analysis-item-label">计划DLE</div><div class="analysis-item-value" style="color:#4F46E5">'+thrPct+'%</div><div class="analysis-item-sub">'+(answers.teamName === "二部二课" ? "二部二课标准" : "通用标准")+'</div></div>';
+    html += '<div class="analysis-item"><div class="analysis-item-label">计划DLE</div><div class="analysis-item-value" style="color:#4F46E5">'+thrPct+'%</div><div class="analysis-item-sub">'+(answers.teamName === "二部二课" ? "标准100%" : "标准100%")+'</div></div>';
     html += '<div class="analysis-item"><div class="analysis-item-label">实际DLE</div><div class="analysis-item-value" style="color:'+(dle<thr?'#EF4444':'#10B981')+'">'+dlePct+'%</div><div class="analysis-item-sub">有效工时/实际工时</div></div>';
     html += '</div>';
     html += '<div style="padding:10px 14px;background:#FEF2F2;border-radius:10px;margin-bottom:12px;font-size:13px;color:#991B1B">工时差距：<strong>'+dleHoursGap.toFixed(1)+'</strong> 小时（实际工时 '+ah+'h − 有效工时 '+eh+'h / '+thrPct+'%）</div>';
@@ -3252,7 +3252,7 @@ function exportData() {
       var ah = r.actualHours || 0;
       var rLossGap = r.lossGap || (ah - eh);
       var coverage = r.coverage != null ? r.coverage : (rLossGap > 0 ? (lossHours / rLossGap) * 100 : 100);
-      var dleThr = (r.teamName === "二部二课") ? 0.80 : 0.75;
+      var dleThr = (r.teamName === "二部二课") ? 1.00 : 1.00;
       var effStatus = dle < dleThr ? "DLE需分析" : "DLE正常";
       return [
         r.teamName || "",
@@ -3486,7 +3486,7 @@ function renderDashboard() {
       // DLE mode record
       var dle = r.dle || 0;
       var dlePct = (dle * 100).toFixed(1);
-      var dleThr = (r.teamName === "二部二课") ? 0.80 : 0.75;
+      var dleThr = (r.teamName === "二部二课") ? 1.00 : 1.00;
       var dleColor = dle < dleThr ? '#EF4444' : '#10B981';
       var eh = r.effectiveHours || 0;
       var ah = r.actualHours || 0;
@@ -3853,7 +3853,7 @@ function drawDLEChart(data) {
     const x = padding.left + groupWidth * i + groupWidth / 2;
     var dle = r.dle || 0;
     var dlePct = dle * 100;
-    var dleThr = (r.teamName === "二部二课") ? 80 : 75;
+    var dleThr = (r.teamName === "二部二课") ? 100 : 100;
     var thrH = (dleThr / maxVal) * chartH;
     var dleH = (dlePct / maxVal) * chartH;
 
