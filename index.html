@@ -1574,6 +1574,7 @@ function loadSheetJS(callback) {
 }
 
 // Build one data row (36 cols) from a record
+// Base col order: 日期,提交时间,班组,分析模式,目标产值,实际产值,人时产值,产值状态,计划工时/有效工时,实际工时(h),DLE(%)/达成率,损失工时,效率状态
 function buildTemplateRow(r) {
   var lossHours = (r.abnormalReasons || []).reduce(function(s, a) { return s + (a.hours || 0); }, 0);
   var row = new Array(36).fill('');
@@ -1586,11 +1587,11 @@ function buildTemplateRow(r) {
     var ah = r.actualHours || 0;
     var dleThr = 1.00;
     row[3] = 'DLE分析';
-    row[6] = eh;          // 计划工时/有效工时
-    row[7] = ah;          // 实际工时(h)
-    row[8] = Number((dle * 100).toFixed(1)); // 达成率/DLE(%)
-    row[10] = Number(lossHours.toFixed(1));  // 损失工时
-    row[11] = '—';        // 产值状态
+    row[7] = '—';        // 产值状态
+    row[8] = eh;         // 计划工时/有效工时
+    row[9] = ah;         // 实际工时(h)
+    row[10] = Number((dle * 100).toFixed(1)); // DLE(%)/达成率
+    row[11] = Number(lossHours.toFixed(1));   // 损失工时
     row[12] = dle < dleThr ? 'DLE需分析' : 'DLE正常'; // 效率状态
   } else {
     var compRate = r.targetValue > 0 ? (r.actualValue / r.targetValue) * 100 : 0;
@@ -1600,13 +1601,13 @@ function buildTemplateRow(r) {
     row[3] = '人时产值分析';
     row[4] = r.targetValue || '';   // 目标产值
     row[5] = r.actualValue || '';   // 实际产值
-    row[6] = r.standardHours || ''; // 计划工时
-    row[7] = r.actualHours || '';   // 实际工时(h)
-    row[8] = Number(compRate.toFixed(1)); // 达成率
-    row[9] = Number((r.actualPH || actualPH).toFixed(1)); // 人时产值
-    row[10] = Number(lossHours.toFixed(1));
-    row[11] = isLowTarget ? '—' : (r.actualValue >= r.targetValue ? '达标' : '未达标');
-    row[12] = isLowTarget ? '需分析' : (actualPH >= plannedPH ? '达标' : '未达标');
+    row[6] = Number((r.actualPH || actualPH).toFixed(1)); // 人时产值
+    row[7] = isLowTarget ? '—' : (r.actualValue >= r.targetValue ? '达标' : '未达标'); // 产值状态
+    row[8] = r.standardHours || ''; // 计划工时
+    row[9] = r.actualHours || '';   // 实际工时(h)
+    row[10] = Number(compRate.toFixed(1)); // 达成率
+    row[11] = Number(lossHours.toFixed(1)); // 损失工时
+    row[12] = isLowTarget ? '需分析' : (actualPH >= plannedPH ? '达标' : '未达标'); // 效率状态
   }
   // Reason groups starting col 13
   var col = 13;
@@ -1637,7 +1638,7 @@ function buildTemplateRow(r) {
 
 function exportTemplateXLSX(records, filename) {
   loadSheetJS(function(failed) {
-    var header1 = ['日期','提交时间','班组','分析模式','目标产值','实际产值','计划工时/有效工时','实际工时(h)','达成率/DLE(%)','人时产值','损失工时','产值状态','效率状态'];
+    var header1 = ['日期','提交时间','班组','分析模式','目标产值','实际产值','人时产值','产值状态','计划工时/有效工时','实际工时(h)','DLE(%)/达成率','损失工时','效率状态'];
     var header2 = new Array(13).fill('');
     var totalCols = 13;
     EXPORT_REASON_GROUPS.forEach(function(g) {
