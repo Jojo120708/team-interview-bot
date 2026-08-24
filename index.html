@@ -688,6 +688,10 @@ function savePendingUploads(queue) {
 }
 function enqueueUpload(record) {
   var queue = getPendingUploads();
+  // Avoid duplicates: remove any existing entry for same team+date first
+  queue = queue.filter(function(q) {
+    return !(q.record.teamName === record.teamName && q.record.date === record.date);
+  });
   queue.push({ record: record, attempts: 0, lastAttempt: new Date().toISOString() });
   savePendingUploads(queue);
 }
@@ -811,6 +815,8 @@ function doCloudUpload(record, attempt, isRetry) {
 }
 
 // Verify upload succeeded by re-reading data
+// Must match teamName+date+submitTime: a team+date match with a DIFFERENT submitTime
+// means our write was overwritten by another client's stale data (race condition)
 function verifyUpload(record, attempt, isRetry) {
   setTimeout(function() {
     var xhr = new XMLHttpRequest();
@@ -824,7 +830,7 @@ function verifyUpload(record, attempt, isRetry) {
           var data = resp.record || {};
           var records = data.records || [];
           var found = records.some(function(r) {
-            return r.teamName === record.teamName && r.date === record.date;
+            return r.teamName === record.teamName && r.date === record.date && r.submitTime === record.submitTime;
           });
           if (found) {
             dequeueUpload(record);
