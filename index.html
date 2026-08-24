@@ -451,12 +451,13 @@ const REASON_CATEGORIES = [
     name: "停机类",
     label: "原因分类一：停机类",
     desc: "停机时数 × 影响人数 = 合计影响工时",
-    options: ["设备原因","模具原因","工艺原因"],
+    options: ["设备原因","模具原因","换膜原因","工艺原因"],
     fields: ["downtimeHours","affectedPeople"],
     fieldLabels: { downtimeHours:"停机时数（小时）", affectedPeople:"影响人数（人）" },
     notePlaceholders: {
       "设备原因": "请说明是哪个产线哪台设备异常，影响的是哪个产品",
       "模具原因": "请说明是哪个产线哪台模具异常，影响的是哪个产品",
+      "换膜原因": "请说明是哪个产线哪次换膜，影响的是哪个产品",
       "工艺原因": "请说明是哪个产线哪项工艺异常，影响的是哪个产品"
     },
     calcHours: function(d) { return Number(d.downtimeHours||0) * Number(d.affectedPeople||0); }
@@ -511,7 +512,7 @@ function groupProductReasons(reasons) {
 }
 
 const REASON_COLORS = {
-  "设备原因":"#EF4444","模具原因":"#F59E0B","工艺原因":"#8B5CF6",
+  "设备原因":"#EF4444","模具原因":"#F59E0B","换膜原因":"#F97316","工艺原因":"#8B5CF6",
   "品质返工":"#06B6D4","新品调试":"#10B981","其他原因":"#6B7280",
 };
 
@@ -528,18 +529,10 @@ const QUESTIONS = [
 
 // Get visible questions based on current mode
 function getVisibleQuestions() {
-  var isDLE = answers.teamName && (answers.teamName === "二部一课" || answers.teamName === "二部二课");
-  if (isDLE) {
-    // DLE mode: only teamName, date, effectiveHours, actualHours
-    return QUESTIONS.filter(function(q) {
-      return q.id !== "targetValue" && q.id !== "actualValue" && q.id !== "standardHours" && q.id !== "attendanceHours";
-    });
-  } else {
-    // Normal mode: skip effectiveHours/attendanceHours
-    return QUESTIONS.filter(function(q) {
-      return q.id !== "effectiveHours" && q.id !== "attendanceHours";
-    });
-  }
+  // All teams use DLE mode: only teamName, date, effectiveHours, actualHours
+  return QUESTIONS.filter(function(q) {
+    return q.id !== "targetValue" && q.id !== "actualValue" && q.id !== "standardHours" && q.id !== "attendanceHours";
+  });
 }
 
 // ==================== STATE ====================
@@ -1102,26 +1095,47 @@ function sendDingTalkNotification(record) {
   var config = getWebhookConfig();
   if (!config.enabled || !config.url) return;
 
-  var compRate = pctNum(record.actualValue, record.targetValue);
-  var statusText = getCompletionLabel(compRate);
-  var statusEmoji = compRate >= 100 ? '&#x2705;' : compRate >= 90 ? '&#x1F7E1;' : '&#x274C;';
+  var text;
+  var title;
 
-  // Build markdown message
-  var text = '### ' + statusEmoji + ' ' + record.teamName + ' 产值日报\n\n';
-  text += '**日期：** ' + record.date + '\n\n';
-  text += '| 指标 | 数值 |\n|:---|:---|\n';
-  text += '| 目标产值 | ' + fmtW(record.targetValue) + ' |\n';
-  text += '| 实际产值 | ' + fmtW(record.actualValue) + ' |\n';
-  text += '| 达成率 | **' + compRate.toFixed(1) + '%** |\n';
-  text += '| 计划工时 | ' + record.standardHours + 'h |\n';
-  text += '| 实际工时 | ' + record.actualHours + 'h |\n';
+  if (record.isDLE) {
+    // DLE mode notification
+    var dleThr = record.teamName === "二部二课" ? 0.80 : 0.75;
+    var dle = record.dle || 0;
+    var dleOk = dle >= dleThr;
+    var statusEmoji2 = dleOk ? '&#x2705;' : '&#x274C;';
+    text = '### ' + statusEmoji2 + ' ' + record.teamName + ' DLE日报\n\n';
+    text += '**日期：** ' + record.date + '\n\n';
+    text += '| 指标 | 数值 |\n|:---|:---|\n';
+    text += '| 目标DLE | ' + (dleThr * 100).toFixed(0) + '% |\n';
+    text += '| 实际DLE | **' + (dle * 100).toFixed(1) + '%** |\n';
+    text += '| 有效工时 | ' + (record.effectiveHours || 0) + 'h |\n';
+    text += '| 实际工时 | ' + record.actualHours + 'h |\n';
+    text += '| 工时差距 | ' + (record.lossGap != null ? record.lossGap.toFixed(1) : '—') + 'h |\n';
+    text += '\n**状态：** ' + (dleOk ? 'DLE正常' : 'DLE需分析') + '\n';
+  } else {
+    // Production value mode notification
+    var compRate = pctNum(record.actualValue, record.targetValue);
+    var statusText = getCompletionLabel(compRate);
+    var statusEmoji = compRate >= 100 ? '&#x2705;' : compRate >= 90 ? '&#x1F7E1;' : '&#x274C;';
 
-  if (record.plannedPH != null) {
-    text += '| 计划人时产值 | ' + fmtPH(record.plannedPH) + ' 元/h |\n';
-    text += '| 实际人时产值 | ' + fmtPH(record.actualPH) + ' 元/h |\n';
+    text = '### ' + statusEmoji + ' ' + record.teamName + ' 产值日报\n\n';
+    text += '**日期：** ' + record.date + '\n\n';
+    text += '| 指标 | 数值 |\n|:---|:---|\n';
+    text += '| 目标产值 | ' + fmtW(record.targetValue) + ' |\n';
+    text += '| 实际产值 | ' + fmtW(record.actualValue) + ' |\n';
+    text += '| 达成率 | **' + compRate.toFixed(1) + '%** |\n';
+    text += '| 计划工时 | ' + record.standardHours + 'h |\n';
+    text += '| 实际工时 | ' + record.actualHours + 'h |\n';
+
+    if (record.plannedPH != null) {
+      text += '| 计划人时产值 | ' + fmtPH(record.plannedPH) + ' 元/h |\n';
+      text += '| 实际人时产值 | ' + fmtPH(record.actualPH) + ' 元/h |\n';
+    }
+
+    text += '\n**状态：** ' + statusText + '\n';
+    title = record.teamName + ' 产值日报 ' + compRate.toFixed(1) + '%';
   }
-
-  text += '\n**状态：** ' + statusText + '\n';
 
   // Add abnormal reasons if any
   if (record.abnormalReasons && record.abnormalReasons.length > 0) {
@@ -1150,10 +1164,14 @@ function sendDingTalkNotification(record) {
     text += '\n无异常，生产正常。';
   }
 
+  if (record.isDLE) {
+    title = record.teamName + ' DLE日报 ' + (record.dle * 100).toFixed(1) + '%';
+  }
+
   var payload = {
     msgtype: "markdown",
     markdown: {
-      title: record.teamName + ' 产值日报 ' + compRate.toFixed(1) + '%',
+      title: title,
       text: text
     }
   };
@@ -1782,7 +1800,7 @@ function fmtPH(n) {
   return n > 0 ? n.toFixed(1) : "—";
 }
 function isDLEMode() {
-  return answers.teamName && (answers.teamName === "二部一课" || answers.teamName === "二部二课");
+  return true; // all teams use DLE analysis
 }
 function calcDLE() {
   var eh = Number(answers.effectiveHours) || 0;
@@ -1792,7 +1810,7 @@ function calcDLE() {
 }
 function getDLEThreshold() {
   if (answers.teamName === "二部二课") return 0.80;
-  return 0.75; // 二部一课 default
+  return 0.75; // default for all other teams
 }
 function fmtH(n) {
   return n.toFixed(1) + "h";
@@ -2218,11 +2236,11 @@ function renderReasonDetails() {
     var cov = dleHoursGap > 0 ? (totalLoss / dleHoursGap) * 100 : 100;
     var covColor = cov >= 90 ? '#10B981' : cov >= 60 ? '#F59E0B' : '#EF4444';
     html += '<div class="analysis-grid">';
-    html += '<div class="analysis-item"><div class="analysis-item-label">计划DLE</div><div class="analysis-item-value" style="color:#4F46E5">'+thrPct+'%</div><div class="analysis-item-sub">'+(answers.teamName === "二部二课" ? "二部二课标准" : "二部一课标准")+'</div></div>';
+    html += '<div class="analysis-item"><div class="analysis-item-label">计划DLE</div><div class="analysis-item-value" style="color:#4F46E5">'+thrPct+'%</div><div class="analysis-item-sub">'+(answers.teamName === "二部二课" ? "二部二课标准" : "通用标准")+'</div></div>';
     html += '<div class="analysis-item"><div class="analysis-item-label">实际DLE</div><div class="analysis-item-value" style="color:'+(dle<thr?'#EF4444':'#10B981')+'">'+dlePct+'%</div><div class="analysis-item-sub">有效工时/实际工时</div></div>';
     html += '</div>';
     html += '<div style="padding:10px 14px;background:#FEF2F2;border-radius:10px;margin-bottom:12px;font-size:13px;color:#991B1B">工时差距：<strong>'+dleHoursGap.toFixed(1)+'</strong> 小时（实际工时 '+ah+'h − 有效工时 '+eh+'h / '+thrPct+'%）</div>';
-    html += '<div class="coverage-bar-wrap"><div class="coverage-text" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:13px;color:#6B7280">已分析覆盖率（需≥90%）</span><span style="font-size:13px;font-weight:700;color:'+covColor+'">'+totalLoss.toFixed(1)+' / '+dleHoursGap.toFixed(1)+' 小时 ('+cov.toFixed(0)+'%)</span></div><div class="coverage-bar"><div class="coverage-bar-fill" style="width:'+Math.min(cov,100)+'%;background:'+covColor+'"></div></div></div>';
+    html += '<div class="coverage-bar-wrap"><div class="coverage-text" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:13px;color:#6B7280">已分析覆盖率（需≥95%）</span><span style="font-size:13px;font-weight:700;color:'+covColor+'">'+totalLoss.toFixed(1)+' / '+dleHoursGap.toFixed(1)+' 小时 ('+cov.toFixed(0)+'%)</span></div><div class="coverage-bar"><div class="coverage-bar-fill" style="width:'+Math.min(cov,100)+'%;background:'+covColor+'"></div></div></div>';
   } else if (isActualPHBelowPlanned()) {
     var plannedPH = calcPlannedPH();
     var actualPH = calcActualPH();
@@ -2336,9 +2354,9 @@ function renderReasonDetails() {
         html += '<div style="margin-top:2px">• '+item.reason+'：还需填写 '+item.missing.join('、')+'</div>';
       });
       html += '</div>';
-    } else if (isActualPHBelowPlanned() && getCoveragePct() < 90) {
+    } else if (isDLEMode() && calcDLE() < getDLEThreshold() && getCoveragePct() < 95) {
       html += '<div id="validation-msg" style="margin-top:10px;padding:10px 14px;background:#FEF3C7;border-radius:10px;font-size:12px;color:#92400E;border:1px solid #FDE68A">';
-      html += '覆盖率需达到 90% 才能继续，当前 '+getCoveragePct().toFixed(0)+'%，请点击下方"添加更多损失原因"补充分析';
+      html += '覆盖率需达到 95% 才能继续，当前 '+getCoveragePct().toFixed(0)+'%，请点击下方"添加更多损失原因"补充分析';
       html += '</div>';
     }
   }
@@ -2399,7 +2417,7 @@ function renderMoreAnalysis() {
     var expectedHours = thr > 0 ? eh / thr : ah;
     var dleHoursGap = ah - expectedHours;
     html += '<div class="analysis-grid">';
-    html += '<div class="analysis-item"><div class="analysis-item-label">计划DLE</div><div class="analysis-item-value" style="color:#4F46E5">'+thrPct+'%</div><div class="analysis-item-sub">'+(answers.teamName === "二部二课" ? "二部二课标准" : "二部一课标准")+'</div></div>';
+    html += '<div class="analysis-item"><div class="analysis-item-label">计划DLE</div><div class="analysis-item-value" style="color:#4F46E5">'+thrPct+'%</div><div class="analysis-item-sub">'+(answers.teamName === "二部二课" ? "二部二课标准" : "通用标准")+'</div></div>';
     html += '<div class="analysis-item"><div class="analysis-item-label">实际DLE</div><div class="analysis-item-value" style="color:'+(dle<thr?'#EF4444':'#10B981')+'">'+dlePct+'%</div><div class="analysis-item-sub">有效工时/实际工时</div></div>';
     html += '</div>';
     html += '<div style="padding:10px 14px;background:#FEF2F2;border-radius:10px;margin-bottom:12px;font-size:13px;color:#991B1B">工时差距：<strong>'+dleHoursGap.toFixed(1)+'</strong> 小时（实际工时 '+ah+'h − 有效工时 '+eh+'h / '+thrPct+'%）</div>';
@@ -2445,12 +2463,12 @@ function renderMoreAnalysis() {
   // Render nav buttons
   var navContainer = document.getElementById("nav-container");
   if (!navContainer) return;
-  var canFinish = cov >= 90;
+  var canFinish = cov >= 95;
   var navHtml = '<div class="nav-buttons"><button class="btn-nav btn-prev" data-action="goPrev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> 返回</button>';
   if (canFinish) {
     navHtml += '<button class="btn-nav btn-next primary" data-action="goNext">完成分析 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>';
   } else {
-    navHtml += '<button class="btn-nav btn-next primary" disabled>需覆盖90%差距 ('+cov.toFixed(0)+'%)</button>';
+    navHtml += '<button class="btn-nav btn-next primary" disabled>需覆盖95%差距 ('+cov.toFixed(0)+'%)</button>';
   }
   navHtml += '</div>';
   navContainer.innerHTML = navHtml;
@@ -2543,15 +2561,15 @@ function isFieldsComplete() {
   return true;
 }
 
-// Check if ALL questions, reason details, and coverage >= 90% are satisfied
+// Check if ALL questions, reason details, and coverage >= 95% are satisfied
 function isAllAnswered() {
   if (!isFieldsComplete()) return false;
-  // Check coverage >= 90% when target not met
+  // Check coverage >= 95% when DLE below threshold
   var reasonList = answers.reasonList || [];
   var needsAnalysis = isDLEMode() ? (calcDLE() < getDLEThreshold()) : isActualPHBelowPlanned();
   if (needsAnalysis && reasonList.length > 0) {
     var cov = getCoveragePct();
-    if (cov < 90) return false;
+    if (cov < 95) return false;
   }
   return true;
 }
@@ -2563,7 +2581,31 @@ function renderCompletion() {
   const metGoal = !isActualPHBelowPlanned();
   let html = '<div class="completion">';
 
-  if (metGoal) {
+  if (isDLEMode()) {
+    // DLE mode completion page
+    var dle = calcDLE();
+    var dleThr = getDLEThreshold();
+    var dleOk = dle >= dleThr;
+    var eh2 = Number(answers.effectiveHours) || 0;
+    var ah2 = Number(answers.actualHours) || 0;
+    var expH = dleThr > 0 ? eh2 / dleThr : ah2;
+    var dleGap = ah2 - expH;
+    var cov3 = getCoveragePct();
+    var totalLoss3 = getTotalLossHours();
+    html += '<h3 style="font-size:20px;color:'+(dleOk?'#065F46':'#B91C1C')+';margin-bottom:8px">采访结束，请提交</h3>';
+    html += '<p><strong>'+answers.teamName+'</strong> · '+answers.date+'</p>';
+    html += '<div style="text-align:left;margin:16px 0;padding:14px 16px;background:'+(dleOk?'#ECFDF5':'#FEF2F2')+';border-radius:12px;border:1px solid '+(dleOk?'#A7F3D0':'#FECACA')+'">';
+    html += '<div style="font-size:13px;font-weight:600;color:'+(dleOk?'#065F46':'#991B1B')+';margin-bottom:10px">DLE分析</div>';
+    html += '<div style="display:flex;gap:20px;margin-bottom:8px">';
+    html += '<div><span style="font-size:12px;color:#6B7280">目标DLE：</span><span style="font-size:14px;font-weight:700;color:#4F46E5">'+(dleThr*100).toFixed(0)+'%</span></div>';
+    html += '<div><span style="font-size:12px;color:#6B7280">实际DLE：</span><span style="font-size:14px;font-weight:700;color:'+(dleOk?'#10B981':'#EF4444')+'">'+(dle*100).toFixed(1)+'%</span></div>';
+    html += '</div>';
+    html += '<div style="font-size:12px;color:#6B7280">有效工时 '+eh2+'h · 实际工时 '+ah2+'h · 工时差距 '+dleGap.toFixed(1)+'h</div>';
+    if (!dleOk) {
+      html += '<div style="font-size:12px;color:#6B7280;margin-top:4px">已分析 '+totalLoss3.toFixed(1)+'h，覆盖率 '+cov3.toFixed(0)+'%</div>';
+    }
+    html += '</div>';
+  } else if (metGoal) {
     // Team met or exceeded the goal - show congratulatory message
     var plannedPH = calcPlannedPH();
     var actualPH = calcActualPH();
@@ -2641,15 +2683,15 @@ function renderCompletion() {
     html += '<button class="btn-submit" disabled style="opacity:0.5;cursor:not-allowed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> 请先完成所有问题</button>';
     html += '<button class="btn-submit" data-action="goBackToMissing" style="background:#F59E0B;margin-top:8px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> 返回修改</button>';
   } else if (!allDone) {
-    // Fields complete but coverage < 90%
+    // Fields complete but coverage < 95%
     var lossGap = calcLossGap();
     var totalLoss2 = getTotalLossHours();
     var cov2 = getCoveragePct();
     html += '<div style="margin:12px 0;padding:12px 14px;background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;text-align:left">';
     html += '<div style="font-size:13px;font-weight:700;color:#991B1B;margin-bottom:6px">⚠️ 异常原因覆盖率不足，无法提交</div>';
-    html += '<div style="font-size:12px;color:#B91C1C;line-height:1.6">当前覆盖率 <strong>'+cov2.toFixed(0)+'%</strong>（已分析 '+totalLoss2.toFixed(1)+'h / 需覆盖 '+lossGap.toFixed(1)+'h），需达到 <strong>90%</strong> 以上才能提交。请补充更多损失原因。</div>';
+    html += '<div style="font-size:12px;color:#B91C1C;line-height:1.6">当前覆盖率 <strong>'+cov2.toFixed(0)+'%</strong>（已分析 '+totalLoss2.toFixed(1)+'h / 需覆盖 '+lossGap.toFixed(1)+'h），需达到 <strong>95%</strong> 以上才能提交。请补充更多损失原因。</div>';
     html += '</div>';
-    html += '<button class="btn-submit" disabled style="opacity:0.5;cursor:not-allowed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> 请先补充异常原因至90%覆盖率</button>';
+    html += '<button class="btn-submit" disabled style="opacity:0.5;cursor:not-allowed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> 请先补充异常原因至95%覆盖率</button>';
     html += '<button class="btn-submit" data-action="goBackToMissing" style="background:#F59E0B;margin-top:8px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> 返回补充原因</button>';
   } else if (isSubmitted) {
     html += '<button class="btn-submit" disabled style="opacity:0.5;cursor:not-allowed;background:#9CA3AF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> 已提交</button>';
@@ -2781,11 +2823,11 @@ function updateCoverageDisplay() {
   });
   var totalEls = document.querySelectorAll('.loss-total');
   totalEls.forEach(function(el) { el.innerHTML = '损失工时合计：<strong>'+totalLoss.toFixed(1)+'</strong> 小时'; });
-  // Update coverage bar if in 人时产值 mode
-  if (!isActualPHBelowPlanned()) return;
+  // Update coverage bar if DLE below threshold
+  if (!(isDLEMode() && calcDLE() < getDLEThreshold())) return;
   var lossGap = calcLossGap();
   var cov = getCoveragePct();
-  var covColor = cov >= 90 ? '#10B981' : cov >= 60 ? '#F59E0B' : '#EF4444';
+  var covColor = cov >= 95 ? '#10B981' : cov >= 60 ? '#F59E0B' : '#EF4444';
   var barFills = document.querySelectorAll('.coverage-bar-fill');
   barFills.forEach(function(el) { el.style.width = Math.min(cov,100)+'%'; el.style.background = covColor; });
   var covTexts = document.querySelectorAll('.coverage-text');
@@ -2819,8 +2861,8 @@ function updateCoverageDisplay() {
         var msg = '<div style="font-weight:600;margin-bottom:4px">以下原因信息不完整：</div>';
         _incomplete.forEach(function(item) { msg += '<div style="margin-top:2px">• '+item.reason+'：还需填写 '+item.missing.join('、')+'</div>'; });
         msgEl.innerHTML = msg;
-      } else if (isActualPHBelowPlanned() && getCoveragePct() < 90) {
-        msgEl.innerHTML = '覆盖率需达到 90% 才能继续，当前 '+getCoveragePct().toFixed(0)+'%，请点击下方"添加更多损失原因"补充分析';
+      } else if (isDLEMode() && calcDLE() < getDLEThreshold() && getCoveragePct() < 95) {
+        msgEl.innerHTML = '覆盖率需达到 95% 才能继续，当前 '+getCoveragePct().toFixed(0)+'%，请点击下方"添加更多损失原因"补充分析';
       }
       msgEl.style.display = "";
     }
@@ -2855,7 +2897,7 @@ function canProceed() {
     return true;
   }
   if (currentStep === visibleQs.length + 3) {
-    return getCoveragePct() >= 90;
+    return getCoveragePct() >= 95;
   }
   return true;
 }
@@ -2907,7 +2949,7 @@ function goNext() {
   } else if (currentStep === visibleQs.length + 2) {
     // Reason details step - save form values before navigating away
     saveReasonFieldValues();
-    if ((isDLEMode() ? calcDLE() < getDLEThreshold() : isActualPHBelowPlanned()) && getCoveragePct() < 90) {
+    if ((isDLEMode() ? calcDLE() < getDLEThreshold() : isActualPHBelowPlanned()) && getCoveragePct() < 95) {
       currentStep = visibleQs.length + 3; // go to more analysis
     } else {
       currentStep = visibleQs.length + 4; // go to completion
@@ -3414,7 +3456,7 @@ function renderDashboard() {
 
   // Charts Row 2 - DLE chart for DLE teams only
   html += '<div class="chart-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">';
-  html += '<div class="chart-card"><h3>DLE对比分析（二部一课/二部二课）</h3><div class="chart-container"><canvas id="chart-dle"></canvas></div></div>';
+  html += '<div class="chart-card"><h3>DLE对比分析</h3><div class="chart-container"><canvas id="chart-dle"></canvas></div></div>';
   html += '<div class="chart-card"><h3>各'+(dashboardTimeFilter === "day" ? "班组" : "时段")+'达成率</h3><div class="chart-container"><canvas id="chart-completion"></canvas></div></div>';
   html += '</div>';
 
