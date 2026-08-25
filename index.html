@@ -516,6 +516,10 @@ const REASON_COLORS = {
   "品质返工":"#06B6D4","新品调试":"#10B981","其他原因":"#6B7280",
 };
 
+// Max allowed value for per-occurrence hours fields in reason details
+var MAX_REASON_HOURS = 13;
+function isHoursField(f) { return f === 'downtimeHours' || f === 'hoursPerPerson' || f === 'impactHours'; }
+
 const QUESTIONS = [
   { id:"teamName", label:"请选择班组", placeholder:"请选择班组", inputType:"select" },
   { id:"date", label:"这是哪一天的生产数据？", placeholder:"例如：2026-07-23", inputType:"date" },
@@ -2469,7 +2473,8 @@ function renderReasonDetails() {
       cat.fields.forEach(function(f) {
         var val = rd[f];
         if (f === 'productModel') { if (val === undefined || (typeof val === 'string' && val.trim() === "")) missing.push(cat.fieldLabels[f]); }
-        else { if (val === undefined || val === "" || Number(val) <= 0) missing.push(cat.fieldLabels[f]); }
+        else if (val === undefined || val === "" || Number(val) <= 0) missing.push(cat.fieldLabels[f]);
+        else if (isHoursField(f) && Number(val) > MAX_REASON_HOURS) missing.push(cat.fieldLabels[f] + "不能超过" + MAX_REASON_HOURS + "小时");
       });
       // Note is required for all categories (manual input)
       {
@@ -2682,6 +2687,8 @@ function isFieldsComplete() {
       } else {
         if (fval === undefined || fval === "" || Number(fval) <= 0) return false;
       }
+      // Hours fields must not exceed MAX_REASON_HOURS
+      if (isHoursField(f) && Number(fval) > MAX_REASON_HOURS) return false;
     }
     // Note is required for all categories (manual input)
     {
@@ -2796,6 +2803,7 @@ function renderCompletion() {
           if (mfval === undefined || (typeof mfval === 'string' && mfval.trim() === "")) missingList.push(mitem.reason + ' - ' + (mcat.fieldLabels[mf] || mf));
         } else {
           if (mfval === undefined || mfval === "" || Number(mfval) <= 0) missingList.push(mitem.reason + ' - ' + (mcat.fieldLabels[mf] || mf));
+          else if (isHoursField(mf) && Number(mfval) > MAX_REASON_HOURS) missingList.push(mitem.reason + ' - ' + (mcat.fieldLabels[mf] || mf) + '不能超过' + MAX_REASON_HOURS + '小时');
         }
       }
       // Note is required for all categories (manual input)
@@ -2865,7 +2873,8 @@ function renderNavButtons() {
           cat.fields.forEach(function(f) {
             var val = rd[f];
             if (f === 'productModel') { if (val === undefined || (typeof val === 'string' && val.trim() === "")) missing.push(cat.fieldLabels[f]); }
-            else { if (val === undefined || val === "" || Number(val) <= 0) missing.push(cat.fieldLabels[f]); }
+            else if (val === undefined || val === "" || Number(val) <= 0) missing.push(cat.fieldLabels[f]);
+            else if (isHoursField(f) && Number(val) > MAX_REASON_HOURS) missing.push(cat.fieldLabels[f] + "不能超过" + MAX_REASON_HOURS + "小时");
           });
           // Note is required for all categories (manual input)
           {
@@ -2912,6 +2921,24 @@ function onReasonFieldInput(el, idx, fieldName) {
   if (!item.data) item.data = {};
   var isText = fieldName === 'productModel';
   item.data[fieldName] = isText ? el.value : (el.value === "" ? "" : Number(el.value));
+  // Validate hours fields: must not exceed MAX_REASON_HOURS
+  if (isHoursField(fieldName)) {
+    var errId = 'field-err-' + idx + '-' + fieldName;
+    var prevErr = document.getElementById(errId);
+    if (el.value !== "" && Number(el.value) > MAX_REASON_HOURS) {
+      el.style.borderColor = '#EF4444';
+      if (!prevErr) {
+        prevErr = document.createElement('div');
+        prevErr.id = errId;
+        prevErr.style.cssText = 'font-size:11px;color:#EF4444;margin-top:2px;';
+        el.parentElement.appendChild(prevErr);
+      }
+      prevErr.textContent = '不能超过' + MAX_REASON_HOURS + '小时（当前 ' + el.value + '），请修改';
+    } else {
+      el.style.borderColor = '';
+      if (prevErr) prevErr.remove();
+    }
+  }
   // Update calculated hours display for this reason
   var calcEl = document.getElementById("calc-hours-" + idx);
   if (calcEl) {
@@ -2968,7 +2995,8 @@ function updateCoverageDisplay() {
         cat.fields.forEach(function(f) {
           var val = rd[f];
           if (f === 'productModel') { if (val === undefined || (typeof val === 'string' && val.trim() === "")) missing.push(cat.fieldLabels[f]); }
-          else { if (val === undefined || val === "" || Number(val) <= 0) missing.push(cat.fieldLabels[f]); }
+          else if (val === undefined || val === "" || Number(val) <= 0) missing.push(cat.fieldLabels[f]);
+          else if (isHoursField(f) && Number(val) > MAX_REASON_HOURS) missing.push(cat.fieldLabels[f] + "不能超过" + MAX_REASON_HOURS + "小时");
         });
         // Note is required for all categories (manual input)
         {
@@ -3120,6 +3148,7 @@ function goBackToMissing() {
       } else {
         if (fval === undefined || fval === "" || Number(fval) <= 0) hasMissing = true;
       }
+      if (isHoursField(f) && fval !== undefined && fval !== "" && Number(fval) > MAX_REASON_HOURS) hasMissing = true;
     }
     // Note is required for all categories (manual input)
     {
