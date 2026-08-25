@@ -3765,10 +3765,18 @@ function drawDLESummaryChart(data) {
     groups[key].std += (r.standardHours || r.effectiveHours || 0);
     groups[key].act += r.actualHours || 0;
   });
+  // DLE color scale: <70% red, 70-80% orange, 80-90% yellow, 90-95% light blue, >=95% green
+  function dleColor(rate) {
+    if (rate >= 95) return "#10B981";
+    if (rate >= 90) return "#60A5FA";
+    if (rate >= 80) return "#FACC15";
+    if (rate >= 70) return "#F97316";
+    return "#EF4444";
+  }
   const chartData = order.map(k => {
     const g = groups[k];
     const rate = g.act > 0 ? (g.std / g.act) * 100 : 0;
-    return { name: k, rate: rate, color: rate >= 100 ? "#10B981" : "#EF4444" };
+    return { name: k, rate: rate, color: dleColor(rate) };
   });
 
   const padding = { top: 20, right: 40, bottom: 20, left: 80 };
