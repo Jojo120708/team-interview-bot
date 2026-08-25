@@ -342,7 +342,7 @@ td { padding: 12px 14px; border-bottom: 1px solid #F3F4F6; }
         <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
       </div>
       <div>
-        <div class="dashboard-header-title">班组产值与工时看板</div>
+        <div class="dashboard-header-title">班组工时与DLE看板</div>
         <div class="dashboard-header-sub" id="dashboard-sub">共 3 个班组 · 实时数据</div>
       </div>
     </div>
@@ -3468,14 +3468,13 @@ function renderDashboard() {
   const content = document.getElementById("dashboard-content");
 
   const n = displayData.length;
-  // For average completion rate, exclude lowTarget records (targetValue < 1万) and DLE records
-  const normalRecords = displayData.filter(r => !r.isDLE && (r.targetValue || 0) >= 1);
-  const avgCompletion = normalRecords.length > 0 ? normalRecords.reduce((s, r) => s + pctNum(r.actualValue, r.targetValue), 0) / normalRecords.length : 0;
+  // Company DLE = sum(standard hours) / sum(actual hours) across all submitted records
   const totalLoss = displayData.reduce((s, r) => s + r.abnormalReasons.reduce((ss, a) => ss + a.hours, 0), 0);
-  // Exclude DLE records from production value totals (they have no 产值 data)
+  const totalActual = displayData.reduce((s, r) => s + r.actualHours, 0);
+  const totalStandardAll = displayData.reduce((s, r) => s + (r.standardHours || r.effectiveHours || 0), 0);
+  const companyDLE = totalActual > 0 ? (totalStandardAll / totalActual) * 100 : 0;
   const nonDLERecords = displayData.filter(r => !r.isDLE);
   const totalStandard = nonDLERecords.reduce((s, r) => s + r.standardHours, 0);
-  const totalActual = displayData.reduce((s, r) => s + r.actualHours, 0);
   const totalTarget = nonDLERecords.reduce((s, r) => s + r.targetValue, 0);
   const totalActualVal = nonDLERecords.reduce((s, r) => s + r.actualValue, 0);
 
@@ -3488,21 +3487,15 @@ function renderDashboard() {
   // KPI Cards
   html += '<div class="kpi-grid">';
   html += '<div class="kpi-card"><div class="kpi-header"><div class="kpi-icon" style="background:#EEF2FF"><svg viewBox="0 0 24 24" fill="none" stroke="#4F46E5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><span class="kpi-label">'+(dashboardTimeFilter === "day" ? "班组数量" : "时段数量")+'</span></div><div class="kpi-value">'+n+'</div></div>';
-  html += '<div class="kpi-card"><div class="kpi-header"><div class="kpi-icon" style="background:#ECFDF5"><svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><span class="kpi-label">平均达成率</span></div><div class="kpi-value" style="color:'+getCompletionColor(avgCompletion)+'">'+avgCompletion.toFixed(1)+'%</div></div>';
+  html += '<div class="kpi-card"><div class="kpi-header"><div class="kpi-icon" style="background:#ECFDF5"><svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><span class="kpi-label">DLE</span></div><div class="kpi-value" style="color:'+(companyDLE>=100?"#10B981":"#EF4444")+'">'+companyDLE.toFixed(1)+'%</div><div class="kpi-sub">标准 '+totalStandardAll.toFixed(1)+'h / 实际 '+totalActual+'h</div></div>';
   html += '<div class="kpi-card"><div class="kpi-header"><div class="kpi-icon" style="background:#EFF6FF"><svg viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div><span class="kpi-label">总产值/目标(万元)</span></div><div class="kpi-value" style="font-size:16px">'+fmtW(totalActualVal)+'</div><div class="kpi-sub">目标 '+fmtW(totalTarget)+'</div></div>';
   html += '<div class="kpi-card"><div class="kpi-header"><div class="kpi-icon" style="background:#FEF2F2"><svg viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><span class="kpi-label">总损失工时</span></div><div class="kpi-value" style="color:'+(totalLoss>0?"#EF4444":"#10B981")+'">'+totalLoss.toFixed(1)+'</div><div class="kpi-sub">实际总工时 '+totalActual+'h / 标准 '+totalStandard+'h</div></div>';
   html += '</div>';
 
-  // Charts Row 1
-  html += '<div class="chart-grid">';
-  html += '<div class="chart-card"><h3>产值目标 vs 实际完成</h3><div class="chart-container"><canvas id="chart-production"></canvas></div></div>';
-  html += '<div class="chart-card"><h3>工时对比分析</h3><div class="chart-container"><canvas id="chart-hours"></canvas></div></div>';
-  html += '</div>';
-
-  // Charts Row 2 - DLE chart for DLE teams only
+  // Charts Row 2 - DLE chart + DLE summary per team/period
   html += '<div class="chart-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">';
   html += '<div class="chart-card"><h3>DLE对比分析</h3><div class="chart-container"><canvas id="chart-dle"></canvas></div></div>';
-  html += '<div class="chart-card"><h3>各'+(dashboardTimeFilter === "day" ? "班组" : "时段")+'达成率</h3><div class="chart-container"><canvas id="chart-completion"></canvas></div></div>';
+  html += '<div class="chart-card"><h3>各'+(dashboardTimeFilter === "day" ? "班组" : "时段")+'DLE</h3><div class="chart-container"><canvas id="chart-completion"></canvas></div></div>';
   html += '</div>';
 
   // Charts Row 3 - Reasons chart
@@ -3633,18 +3626,12 @@ function renderDashboard() {
 
   // Draw charts after DOM update
   setTimeout(() => {
-    // Filter out DLE records from production/completion/hours charts (they have no 产值 data)
-    var chartDataNormal = displayData.filter(function(r) {
-      return !r.isDLE && r.teamName !== "二部一课" && r.teamName !== "二部二课";
-    });
     // DLE teams only
     var chartDataDLE = displayData.filter(function(r) {
       return r.isDLE || r.teamName === "二部一课" || r.teamName === "二部二课";
     });
-    drawProductionChart(chartDataNormal);
-    drawHoursChart(chartDataNormal); // Hours chart excludes DLE teams
     drawDLEChart(chartDataDLE); // New DLE chart for DLE teams only
-    drawCompletionChart(chartDataNormal);
+    drawDLESummaryChart(displayData); // Per-team (day) or per-period (week/month) DLE
     drawReasonsChart(reasonPie);
   }, 50);
 }
@@ -3655,192 +3642,6 @@ function toggleDetail(id) {
 }
 
 // ==================== CHART DRAWING ====================
-function drawProductionChart(data) {
-  const canvas = document.getElementById("chart-production");
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-  const rect = canvas.parentElement.getBoundingClientRect();
-  canvas.width = rect.width * 2;
-  canvas.height = rect.height * 2;
-  ctx.scale(2, 2);
-  const w = rect.width;
-  const h = rect.height;
-
-  const padding = { top: 36, right: 20, bottom: 40, left: 60 };
-  const chartW = w - padding.left - padding.right;
-  const chartH = h - padding.top - padding.bottom;
-
-  const maxVal = Math.max(...data.map(r => Math.max(r.targetValue, r.actualValue))) * 1.15;
-  const barWidth = chartW / data.length / 3;
-  const groupWidth = chartW / data.length;
-
-  // Grid lines
-  ctx.strokeStyle = "#F3F4F6";
-  ctx.lineWidth = 1;
-  for (let i = 0; i <= 4; i++) {
-    const y = padding.top + (chartH / 4) * i;
-    ctx.beginPath();
-    ctx.moveTo(padding.left, y);
-    ctx.lineTo(w - padding.right, y);
-    ctx.stroke();
-    ctx.fillStyle = "#6B7280";
-    ctx.font = "11px sans-serif";
-    ctx.textAlign = "right";
-    ctx.fillText(((maxVal / 4) * (4 - i)).toFixed(1) + "万", padding.left - 8, y + 4);
-  }
-
-  // Bars
-  data.forEach((r, i) => {
-    const x = padding.left + groupWidth * i + groupWidth / 2;
-    const targetH = (r.targetValue / maxVal) * chartH;
-    const actualH = (r.actualValue / maxVal) * chartH;
-
-    // Target bar
-    ctx.fillStyle = "#C7D2FE";
-    ctx.beginPath();
-    ctx.roundRect(x - barWidth - 2, padding.top + chartH - targetH, barWidth, targetH, [4, 4, 0, 0]);
-    ctx.fill();
-
-    // Target value label
-    if (r.targetValue > 0) {
-      ctx.fillStyle = "#9CA3AF";
-      ctx.font = "9px sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(Number(r.targetValue).toFixed(1), x - barWidth / 2 - 2, padding.top + chartH - targetH - 3);
-    }
-
-    // Actual bar
-    ctx.fillStyle = "#4F46E5";
-    ctx.beginPath();
-    ctx.roundRect(x + 2, padding.top + chartH - actualH, barWidth, actualH, [4, 4, 0, 0]);
-    ctx.fill();
-
-    // Actual value label
-    if (r.actualValue > 0) {
-      ctx.fillStyle = "#4F46E5";
-      ctx.font = "9px sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(Number(r.actualValue).toFixed(1), x + barWidth / 2 + 2, padding.top + chartH - actualH - 3);
-    }
-
-    // Label
-    ctx.fillStyle = "#6B7280";
-    ctx.font = "12px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(r.label || r.teamName, x, h - padding.bottom + 20);
-  });
-
-  // Legend
-  ctx.fillStyle = "#C7D2FE";
-  ctx.fillRect(padding.left, h - 15, 12, 12);
-  ctx.fillStyle = "#6B7280";
-  ctx.font = "11px sans-serif";
-  ctx.textAlign = "left";
-  ctx.fillText("目标产值", padding.left + 16, h - 5);
-  ctx.fillStyle = "#4F46E5";
-  ctx.fillRect(padding.left + 80, h - 15, 12, 12);
-  ctx.fillStyle = "#6B7280";
-  ctx.fillText("实际产值", padding.left + 96, h - 5);
-}
-
-function drawHoursChart(data) {
-  const canvas = document.getElementById("chart-hours");
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-  const rect = canvas.parentElement.getBoundingClientRect();
-  canvas.width = rect.width * 2;
-  canvas.height = rect.height * 2;
-  ctx.scale(2, 2);
-  const w = rect.width;
-  const h = rect.height;
-
-  const padding = { top: 32, right: 20, bottom: 40, left: 60 };
-  const chartW = w - padding.left - padding.right;
-  const chartH = h - padding.top - padding.bottom;
-
-  const maxVal = Math.max(...data.map(r => Math.max(r.standardHours, r.actualHours, r.abnormalReasons.reduce((s,a)=>s+a.hours,0)))) * 1.25;
-  const barWidth = chartW / data.length / 4;
-  const groupWidth = chartW / data.length;
-
-  // Grid lines
-  ctx.strokeStyle = "#F3F4F6";
-  ctx.lineWidth = 1;
-  for (let i = 0; i <= 4; i++) {
-    const y = padding.top + (chartH / 4) * i;
-    ctx.beginPath();
-    ctx.moveTo(padding.left, y);
-    ctx.lineTo(w - padding.right, y);
-    ctx.stroke();
-    ctx.fillStyle = "#6B7280";
-    ctx.font = "11px sans-serif";
-    ctx.textAlign = "right";
-    ctx.fillText(Math.round((maxVal / 4) * (4 - i)) + "h", padding.left - 8, y + 4);
-  }
-
-  // Bars
-  data.forEach((r, i) => {
-    const x = padding.left + groupWidth * i + groupWidth / 2;
-    const stdH = (r.standardHours / maxVal) * chartH;
-    const actH = (r.actualHours / maxVal) * chartH;
-    const lossH = (r.abnormalReasons.reduce((s,a)=>s+a.hours,0) / maxVal) * chartH;
-
-    ctx.fillStyle = "#A7F3D0";
-    ctx.beginPath();
-    ctx.roundRect(x - barWidth * 1.5 - 4, padding.top + chartH - stdH, barWidth, stdH, [4, 4, 0, 0]);
-    ctx.fill();
-
-    // Planned hours label
-    if (r.standardHours > 0) {
-      ctx.fillStyle = "#9CA3AF";
-      ctx.font = "9px sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(Math.round(r.standardHours), x - barWidth * 1.5 - 4 + barWidth / 2, padding.top + chartH - stdH - 3);
-    }
-
-    ctx.fillStyle = "#10B981";
-    ctx.beginPath();
-    ctx.roundRect(x - barWidth / 2 - 2, padding.top + chartH - actH, barWidth, actH, [4, 4, 0, 0]);
-    ctx.fill();
-
-    // Actual hours label
-    if (r.actualHours > 0) {
-      ctx.fillStyle = "#10B981";
-      ctx.font = "9px sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(Math.round(r.actualHours), x - barWidth / 2 - 2 + barWidth / 2, padding.top + chartH - actH - 3);
-    }
-
-    ctx.fillStyle = "#FCA5A5";
-    ctx.beginPath();
-    ctx.roundRect(x + barWidth / 2 + 2, padding.top + chartH - lossH, barWidth, lossH, [4, 4, 0, 0]);
-    ctx.fill();
-
-    // Loss hours label
-    if (lossH > 2) {
-      ctx.fillStyle = "#DC2626";
-      ctx.font = "9px sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(Math.round(r.abnormalReasons.reduce((s,a)=>s+a.hours,0)), x + barWidth / 2 + 2 + barWidth / 2, padding.top + chartH - lossH - 3);
-    }
-
-    ctx.fillStyle = "#6B7280";
-    ctx.font = "12px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(r.label || r.teamName, x, h - padding.bottom + 20);
-  });
-
-  // Legend
-  const legends = [["#A7F3D0","计划工时"],["#10B981","实际工时"],["#FCA5A5","损失工时"]];
-  legends.forEach((l, i) => {
-    ctx.fillStyle = l[0];
-    ctx.fillRect(padding.left + i * 80, h - 15, 12, 12);
-    ctx.fillStyle = "#6B7280";
-    ctx.font = "11px sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText(l[1], padding.left + i * 80 + 16, h - 5);
-  });
-}
-
 function drawDLEChart(data) {
   const canvas = document.getElementById("chart-dle");
   if (!canvas) return;
@@ -3942,7 +3743,9 @@ function drawDLEChart(data) {
   ctx.fillText("实际DLE(未达标)", padding.left + 206, h - 5);
 }
 
-function drawCompletionChart(data) {
+// Horizontal bar chart showing DLE per team (day view) or per period (week/month view)
+// DLE = sum(standard/effective hours) / sum(actual hours)
+function drawDLESummaryChart(data) {
   const canvas = document.getElementById("chart-completion");
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
@@ -3953,17 +3756,26 @@ function drawCompletionChart(data) {
   const w = rect.width;
   const h = rect.height;
 
+  // Group records by team name (each group's DLE = total standard / total actual)
+  const groups = {};
+  const order = [];
+  data.forEach(r => {
+    const key = r.label || r.teamName || "未知";
+    if (!groups[key]) { groups[key] = { std: 0, act: 0 }; order.push(key); }
+    groups[key].std += (r.standardHours || r.effectiveHours || 0);
+    groups[key].act += r.actualHours || 0;
+  });
+  const chartData = order.map(k => {
+    const g = groups[k];
+    const rate = g.act > 0 ? (g.std / g.act) * 100 : 0;
+    return { name: k, rate: rate, color: rate >= 100 ? "#10B981" : "#EF4444" };
+  });
+
   const padding = { top: 20, right: 40, bottom: 20, left: 80 };
   const chartW = w - padding.left - padding.right;
   const chartH = h - padding.top - padding.bottom;
-  const barHeight = chartH / data.length * 0.6;
-  const gap = chartH / data.length;
-
-  // Transform raw records into chart data
-  const chartData = data.map(r => {
-    const rate = pctNum(r.actualValue, r.targetValue);
-    return { name: r.label || r.teamName, rate: rate, color: getCompletionColor(rate) };
-  });
+  const barHeight = chartH / chartData.length * 0.6;
+  const gap = chartH / Math.max(chartData.length, 1);
 
   // Grid lines
   ctx.strokeStyle = "#F3F4F6";
