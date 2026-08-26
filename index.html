@@ -701,6 +701,49 @@ function compactForArchive(r) {
   return c;
 }
 
+// Fetch a bin with retry; delay staggers requests to avoid JSONBin 429 rate limits
+function fetchBinRecords(url, delayMs, onDone) {
+  setTimeout(function() {
+    var attemptGet = function(tries) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', url + '/latest', true);
+      xhr.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
+      xhr.timeout = 10000;
+      xhr.onload = function() {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            var resp = JSON.parse(xhr.responseText);
+            onDone(true, ((resp.record || {}).records) || []);
+          } catch(e) { onDone(false, []); }
+        } else if ((xhr.status === 429 || xhr.status >= 500) && tries > 0) {
+          setTimeout(function() { attemptGet(tries - 1); }, 1500);
+        } else {
+          onDone(false, []);
+        }
+      };
+      xhr.onerror = function() { if (tries > 0) { setTimeout(function() { attemptGet(tries - 1); }, 1500); } else onDone(false, []); };
+      xhr.ontimeout = function() { if (tries > 0) { setTimeout(function() { attemptGet(tries - 1); }, 1500); } else onDone(false, []); };
+      xhr.send();
+    };
+    attemptGet(2); // up to 2 retries on rate-limit/network errors
+  }, delayMs);
+}
+
+// Archive months that could contain data: 2026-08 through current month.
+// Future monthly bins are guaranteed empty — never request them.
+function getExistingArchiveMonths() {
+  var out = [];
+  var cur = new Date();
+  var y = cur.getFullYear(), m = cur.getMonth() + 1;
+  var key = y + "-" + String(m).padStart(2, "0");
+  while (key >= "2026-08" && out.length < 60) { // safety cap
+    if (ARCHIVE_BINS[key]) out.push(key);
+    m--; if (m === 0) { m = 12; y--; }
+    key = y + "-" + String(m).padStart(2, "0");
+  }
+  return out;
+}
+
 // Fire-and-forget: archive pruned old records into their monthly bins
 function archivePrunedRecords(pruned) {
   if (!pruned || pruned.length === 0) return;
@@ -1377,31 +1420,21 @@ function showCloudData() {
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
 
-  // Fetch data from main bin + ALL archive bins (full history for admin/export)
-  var allUrls = [JSONBIN_BASE_URL];
-  Object.keys(ARCHIVE_BINS).forEach(function(mo) { allUrls.push(archiveUrl(mo)); });
+  // Fetch main bin + archive bins that may contain data (staggered to avoid 429)
+  var months = getExistingArchiveMonths(); // oldest..current
+  var total = 1 + months.length;
   var allMerged = [];
-  var allPending = allUrls.length;
+  var allPending = total;
   var anyOk = false;
-  allUrls.forEach(function(url) {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', url + '/latest', true);
-    xhr.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
-    xhr.timeout = 10000;
-    xhr.onload = function() {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        anyOk = true;
-        try {
-          var resp0 = JSON.parse(xhr.responseText);
-          allMerged = mergeCloudRecords(allMerged, (resp0.record || {}).records || []);
-        } catch(e) {}
-      }
-      allPending--;
-      if (allPending === 0) renderCloudSummary(anyOk ? allMerged : null);
-    };
-    xhr.onerror = function() { allPending--; if (allPending === 0) renderCloudSummary(anyOk ? allMerged : null); };
-    xhr.ontimeout = function() { allPending--; if (allPending === 0) renderCloudSummary(anyOk ? allMerged : null); };
-    xhr.send();
+  var doneOne = function(ok, recs) {
+    if (ok) anyOk = true;
+    allMerged = mergeCloudRecords(allMerged, recs);
+    allPending--;
+    if (allPending === 0) renderCloudSummary(anyOk ? allMerged : null);
+  };
+  fetchBinRecords(JSONBIN_BASE_URL, 0, doneOne); // main bin first, no delay
+  months.forEach(function(mo, i) {
+    fetchBinRecords(archiveUrl(mo), 300 + i * 250, doneOne); // stagger 250ms apart
   });
 }
 
@@ -2230,7 +2263,7 @@ function getViewMonths() {
   return months;
 }
 
-// Fetch main bin + archive bins for the given months in parallel, merge, callback
+// Fetch main bin + archive bins for the given months (staggered), merge, callback
 function loadCloudDataForView(onDone, onError) {
   var months = getViewMonths();
   var urls = [JSONBIN_BASE_URL];
@@ -2240,29 +2273,17 @@ function loadCloudDataForView(onDone, onError) {
   var merged = [];
   var pending = urls.length;
   var anySuccess = false;
-  urls.forEach(function(url) {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', url + '/latest', true);
-    xhr.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
-    xhr.timeout = 10000;
-    xhr.onload = function() {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        anySuccess = true;
-        try {
-          var resp = JSON.parse(xhr.responseText);
-          var data = resp.record || {};
-          merged = mergeCloudRecords(merged, data.records || []);
-        } catch(e) {}
-      }
-      pending--;
-      if (pending === 0) {
-        if (anySuccess) { loadedViewKey = months.join(","); onDone(merged); }
-        else if (onError) onError();
-      }
-    };
-    xhr.onerror = function() { pending--; if (pending === 0) { if (anySuccess) { loadedViewKey = months.join(","); onDone(merged); } else if (onError) onError(); } };
-    xhr.ontimeout = function() { pending--; if (pending === 0) { if (anySuccess) { loadedViewKey = months.join(","); onDone(merged); } else if (onError) onError(); } };
-    xhr.send();
+  var doneOne = function(ok, recs) {
+    if (ok) anySuccess = true;
+    merged = mergeCloudRecords(merged, recs);
+    pending--;
+    if (pending === 0) {
+      if (anySuccess) { loadedViewKey = months.join(","); onDone(merged); }
+      else if (onError) onError();
+    }
+  };
+  urls.forEach(function(url, i) {
+    fetchBinRecords(url, i * 200, doneOne); // stagger 200ms apart, with retry
   });
 }
 
