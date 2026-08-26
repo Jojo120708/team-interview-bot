@@ -668,6 +668,105 @@ var JSONBIN_BIN_ID = "6a631bd7f5f4af5e29ba44f4";
 var JSONBIN_BASE_URL = "https://api.jsonbin.io/v3/b/" + JSONBIN_BIN_ID;
 var ADMIN_PASSWORD = "minth2026";
 
+// Monthly archive bins: records older than the main-bin rolling window are
+// archived here (compacted) so month views keep full history.
+var ARCHIVE_BINS = {
+  "2026-08": "6a8e5772da38895dfe11396b",
+  "2026-09": "6a8e5773f5f4af5e2942cda2",
+  "2026-10": "6a8e5775f5f4af5e2942cda3",
+  "2026-11": "6a8e5777da38895dfe113978",
+  "2026-12": "6a8e5778da38895dfe113979",
+  "2027-01": "6a8e5779da38895dfe11397a",
+  "2027-02": "6a8e577bf5f4af5e2942cdbb",
+  "2027-03": "6a8e577df5f4af5e2942cdbc",
+  "2027-04": "6a8e577ef5f4af5e2942cdbd",
+  "2027-05": "6a8e5780f5f4af5e2942cdc7",
+  "2027-06": "6a8e5783f5f4af5e2942cdc8",
+  "2027-07": "6a8e5784f5f4af5e2942cdc9",
+  "2027-08": "6a8e5787f5f4af5e2942cdd7",
+  "2027-09": "6a8e5789f5f4af5e2942cdd8",
+  "2027-10": "6a8e578af5f4af5e2942cde7",
+  "2027-11": "6a8e578bda38895dfe1139a3",
+  "2027-12": "6a8e578dda38895dfe1139a4"
+};
+function archiveUrl(monthKey) {
+  return "https://api.jsonbin.io/v3/b/" + ARCHIVE_BINS[monthKey];
+}
+
+// Compact a record for archiving: drop per-reason "data" objects (saves ~40%
+// space; archived records keep reason/hours/note for charts & notes display)
+function compactForArchive(r) {
+  var c = JSON.parse(JSON.stringify(r));
+  (c.abnormalReasons || []).forEach(function(a) { delete a.data; });
+  return c;
+}
+
+// Fire-and-forget: archive pruned old records into their monthly bins
+function archivePrunedRecords(pruned) {
+  if (!pruned || pruned.length === 0) return;
+  var byMonth = {};
+  pruned.forEach(function(r) {
+    var mo = (r.date || "").slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(mo) || !ARCHIVE_BINS[mo]) return;
+    if (!byMonth[mo]) byMonth[mo] = [];
+    byMonth[mo].push(compactForArchive(r));
+  });
+  Object.keys(byMonth).forEach(function(mo) {
+    var url = archiveUrl(mo);
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', url + '/latest', true);
+    xhr.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
+    xhr.timeout = 10000;
+    xhr.onload = function() {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          var resp = JSON.parse(xhr.responseText);
+          var data = resp.record || {};
+          var records = data.records || [];
+          var changed = false;
+          byMonth[mo].forEach(function(r) {
+            var exists = records.some(function(x) {
+              return x.teamName === r.teamName && x.date === r.date && x.submitTime === r.submitTime;
+            });
+            if (!exists) { records.push(r); changed = true; }
+          });
+          if (!changed) return;
+          var xhr2 = new XMLHttpRequest();
+          xhr2.open('PUT', url, true);
+          xhr2.setRequestHeader('Content-Type', 'application/json');
+          xhr2.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
+          xhr2.timeout = 10000;
+          xhr2.onload = function() { if (xhr2.status < 200 || xhr2.status >= 300) console.warn("[Archive] PUT failed " + xhr2.status); };
+          xhr2.onerror = function() { console.warn("[Archive] PUT error"); };
+          xhr2.send(JSON.stringify({ records: records }));
+        } catch(e) { console.warn("[Archive] parse error", e); }
+      } else {
+        console.warn("[Archive] GET failed " + xhr.status);
+      }
+    };
+    xhr.onerror = function() { console.warn("[Archive] GET error"); };
+    xhr.ontimeout = function() { console.warn("[Archive] GET timeout"); };
+    xhr.send();
+  });
+}
+
+// Merge record arrays: dedupe by teamName+date keeping the newest submitTime
+function mergeCloudRecords(a, b) {
+  var out = a.slice();
+  (b || []).forEach(function(r) {
+    var idx = -1;
+    for (var i = 0; i < out.length; i++) {
+      if (out[i].teamName === r.teamName && out[i].date === r.date) { idx = i; break; }
+    }
+    if (idx >= 0) {
+      if (String(r.submitTime || "") > String(out[idx].submitTime || "")) out[idx] = r;
+    } else {
+      out.push(r);
+    }
+  });
+  return out;
+}
+
 // Toast notification helper
 // type: "success" | "error" | "warning" | "syncing"
 function showCloudToast(msg, type, sticky) {
@@ -780,18 +879,32 @@ function doCloudUpload(record, attempt, isRetry) {
           var resp = JSON.parse(xhr.responseText);
           var data = resp.record || {};
           var records = data.records || [];
-          // Auto-prune: drop records older than 15 days to keep bin under the
-          // 100KB free-plan size limit (cloud stores recent data; export xlsx for archive)
+          // Auto-prune: keep 35 days (full month view); archived copies go to
+          // monthly archive bins so history is never lost. Also enforce a size
+          // guard so the main bin stays under the 100KB free-plan limit.
           var cutoff = new Date();
-          cutoff.setDate(cutoff.getDate() - 15);
+          cutoff.setDate(cutoff.getDate() - 35);
           var cutoffStr = cutoff.toISOString().slice(0, 10);
-          var prunedCount = 0;
+          var prunedOld = [];
           records = records.filter(function(r) {
             var keep = !r.date || r.date >= cutoffStr;
-            if (!keep) prunedCount++;
+            if (!keep) prunedOld.push(r);
             return keep;
           });
-          if (prunedCount > 0) console.log("[Cloud] Auto-pruned " + prunedCount + " old record(s) before " + cutoffStr);
+          // Size guard: drop oldest first until payload < 85KB
+          var guardChanged = true;
+          while (guardChanged) {
+            guardChanged = false;
+            var payloadLen = JSON.stringify({ records: records }).length;
+            if (payloadLen > 85000 && records.length > 1) {
+              prunedOld.push(records.shift());
+              guardChanged = true;
+            }
+          }
+          if (prunedOld.length > 0) {
+            console.log("[Cloud] Pruning " + prunedOld.length + " old record(s) → monthly archive");
+            archivePrunedRecords(prunedOld);
+          }
           // Find existing record for same team+date (overwrite, one per team per day)
           var existIdx = -1;
           for (var i = 0; i < records.length; i++) {
@@ -1264,78 +1377,86 @@ function showCloudData() {
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
 
-  // Fetch data from JSONBin.io
-  var xhr = new XMLHttpRequest();
-  xhr.open('GET', JSONBIN_BASE_URL + '/latest', true);
-  xhr.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
-  xhr.timeout = 10000;
-  xhr.onload = function() {
-    var content = document.getElementById('cloud-data-content');
-    if (!content) return;
-    if (xhr.status >= 200 && xhr.status < 300) {
-      try {
-        var resp = JSON.parse(xhr.responseText);
-        var data = resp.record || {};
-        var cloudRecords = data.records || [];
-        if (cloudRecords.length === 0) {
-          content.innerHTML = '<div style="text-align:center;padding:40px 0;color:#9CA3AF;">暂无云端数据</div>';
-          return;
-        }
-        // Sort by date descending
-        cloudRecords.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
-        cloudRecordsCache = cloudRecords;
-        var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">' +
-          '<span style="color:#374151;font-weight:600;">共 ' + cloudRecords.length + ' 条记录</span>' +
-          '<div style="display:flex;gap:8px;">' +
-          '<button data-action="exportCloudCSV" style="display:flex;align-items:center;gap:4px;padding:6px 12px;border-radius:8px;border:1.5px solid #059669;background:#ECFDF5;font-size:12px;color:#059669;font-weight:600;cursor:pointer;">' +
-          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>' +
-          '导出CSV</button>' +
-          '<button data-action="showAdminLogin" style="display:flex;align-items:center;gap:4px;padding:6px 12px;border-radius:8px;border:1.5px solid #DC2626;background:#FEF2F2;font-size:12px;color:#DC2626;font-weight:600;cursor:pointer;">' +
-          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' +
-          '管理</button></div></div>';
-        html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
-        html += '<thead><tr style="background:#F3F4F6;">';
-        html += '<th style="padding:8px 10px;text-align:left;border-bottom:2px solid #E5E7EB;">日期</th>';
-        html += '<th style="padding:8px 10px;text-align:left;border-bottom:2px solid #E5E7EB;">班组</th>';
-        html += '<th style="padding:8px 10px;text-align:right;border-bottom:2px solid #E5E7EB;">目标产值</th>';
-        html += '<th style="padding:8px 10px;text-align:right;border-bottom:2px solid #E5E7EB;">实际产值</th>';
-        html += '<th style="padding:8px 10px;text-align:right;border-bottom:2px solid #E5E7EB;">达成率</th>';
-        html += '<th style="padding:8px 10px;text-align:right;border-bottom:2px solid #E5E7EB;">计划工时</th>';
-        html += '<th style="padding:8px 10px;text-align:right;border-bottom:2px solid #E5E7EB;">实际工时</th>';
-        html += '<th style="padding:8px 10px;text-align:right;border-bottom:2px solid #E5E7EB;">人时产值</th>';
-        html += '</tr></thead><tbody>';
-        cloudRecords.forEach(function(r) {
-          var compRate = r.targetValue > 0 ? (r.actualValue / r.targetValue * 100) : 0;
-          var rateColor = compRate >= 100 ? '#059669' : compRate >= 90 ? '#D97706' : '#DC2626';
-          html += '<tr style="border-bottom:1px solid #F3F4F6;">';
-          html += '<td style="padding:8px 10px;">' + (r.date || '-') + '</td>';
-          html += '<td style="padding:8px 10px;font-weight:600;">' + (r.teamName || '-') + '</td>';
-          html += '<td style="padding:8px 10px;text-align:right;">' + fmtW(r.targetValue) + '</td>';
-          html += '<td style="padding:8px 10px;text-align:right;">' + fmtW(r.actualValue) + '</td>';
-          html += '<td style="padding:8px 10px;text-align:right;color:' + rateColor + ';font-weight:600;">' + compRate.toFixed(1) + '%</td>';
-          html += '<td style="padding:8px 10px;text-align:right;">' + (r.standardHours || '-') + 'h</td>';
-          html += '<td style="padding:8px 10px;text-align:right;">' + (r.actualHours || '-') + 'h</td>';
-          html += '<td style="padding:8px 10px;text-align:right;">' + (r.actualPH ? fmtPH(r.actualPH) : '-') + '</td>';
-          html += '</tr>';
-        });
-        html += '</tbody></table></div>';
-        content.innerHTML = html;
-      } catch(e) {
-        content.innerHTML = '<div style="color:#DC2626;">数据解析失败</div>';
+  // Fetch data from main bin + ALL archive bins (full history for admin/export)
+  var allUrls = [JSONBIN_BASE_URL];
+  Object.keys(ARCHIVE_BINS).forEach(function(mo) { allUrls.push(archiveUrl(mo)); });
+  var allMerged = [];
+  var allPending = allUrls.length;
+  var anyOk = false;
+  allUrls.forEach(function(url) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', url + '/latest', true);
+    xhr.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
+    xhr.timeout = 10000;
+    xhr.onload = function() {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        anyOk = true;
+        try {
+          var resp0 = JSON.parse(xhr.responseText);
+          allMerged = mergeCloudRecords(allMerged, (resp0.record || {}).records || []);
+        } catch(e) {}
       }
-    } else {
-      content.innerHTML = '<div style="color:#DC2626;">加载失败 (HTTP ' + xhr.status + ')</div>';
+      allPending--;
+      if (allPending === 0) renderCloudSummary(anyOk ? allMerged : null);
+    };
+    xhr.onerror = function() { allPending--; if (allPending === 0) renderCloudSummary(anyOk ? allMerged : null); };
+    xhr.ontimeout = function() { allPending--; if (allPending === 0) renderCloudSummary(anyOk ? allMerged : null); };
+    xhr.send();
+  });
+}
+
+function renderCloudSummary(cloudRecords) {
+  var content = document.getElementById('cloud-data-content');
+  if (!content) return;
+  if (cloudRecords === null) {
+    content.innerHTML = '<div style="color:#DC2626;">网络错误，无法加载云端数据</div>';
+    return;
+  }
+  {
+    if (cloudRecords.length === 0) {
+      content.innerHTML = '<div style="text-align:center;padding:40px 0;color:#9CA3AF;">暂无云端数据</div>';
+      return;
     }
-  };
-  xhr.onerror = function() {
-    var content = document.getElementById('cloud-data-content');
-    if (content) content.innerHTML = '<div style="color:#DC2626;">网络错误，请检查网络连接</div>';
-  };
-  xhr.ontimeout = function() {
-    var content = document.getElementById('cloud-data-content');
-    if (content) content.innerHTML = '<div style="color:#DC2626;">请求超时</div>';
-  };
-  xhr.send();
+    // Sort by date descending
+    cloudRecords.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
+    cloudRecordsCache = cloudRecords;
+    var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">' +
+      '<span style="color:#374151;font-weight:600;">共 ' + cloudRecords.length + ' 条记录（含历史归档）</span>' +
+      '<div style="display:flex;gap:8px;">' +
+      '<button data-action="exportCloudCSV" style="display:flex;align-items:center;gap:4px;padding:6px 12px;border-radius:8px;border:1.5px solid #059669;background:#ECFDF5;font-size:12px;color:#059669;font-weight:600;cursor:pointer;">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>' +
+      '导出数据</button>' +
+      '<button data-action="showAdminLogin" style="display:flex;align-items:center;gap:4px;padding:6px 12px;border-radius:8px;border:1.5px solid #DC2626;background:#FEF2F2;font-size:12px;color:#DC2626;font-weight:600;cursor:pointer;">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' +
+      '管理</button></div></div>';
+    html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+    html += '<thead><tr style="background:#F3F4F6;">';
+    html += '<th style="padding:8px 10px;text-align:left;border-bottom:2px solid #E5E7EB;">日期</th>';
+    html += '<th style="padding:8px 10px;text-align:left;border-bottom:2px solid #E5E7EB;">班组</th>';
+    html += '<th style="padding:8px 10px;text-align:right;border-bottom:2px solid #E5E7EB;">目标产值</th>';
+    html += '<th style="padding:8px 10px;text-align:right;border-bottom:2px solid #E5E7EB;">实际产值</th>';
+    html += '<th style="padding:8px 10px;text-align:right;border-bottom:2px solid #E5E7EB;">达成率</th>';
+    html += '<th style="padding:8px 10px;text-align:right;border-bottom:2px solid #E5E7EB;">计划工时</th>';
+    html += '<th style="padding:8px 10px;text-align:right;border-bottom:2px solid #E5E7EB;">实际工时</th>';
+    html += '<th style="padding:8px 10px;text-align:right;border-bottom:2px solid #E5E7EB;">人时产值</th>';
+    html += '</tr></thead><tbody>';
+    cloudRecords.forEach(function(r) {
+      var compRate = r.targetValue > 0 ? (r.actualValue / r.targetValue * 100) : 0;
+      var rateColor = compRate >= 100 ? '#059669' : compRate >= 90 ? '#D97706' : '#DC2626';
+      html += '<tr style="border-bottom:1px solid #F3F4F6;">';
+      html += '<td style="padding:8px 10px;">' + (r.date || '-') + '</td>';
+      html += '<td style="padding:8px 10px;font-weight:600;">' + (r.teamName || '-') + '</td>';
+      html += '<td style="padding:8px 10px;text-align:right;">' + fmtW(r.targetValue) + '</td>';
+      html += '<td style="padding:8px 10px;text-align:right;">' + fmtW(r.actualValue) + '</td>';
+      html += '<td style="padding:8px 10px;text-align:right;color:' + rateColor + ';font-weight:600;">' + compRate.toFixed(1) + '%</td>';
+      html += '<td style="padding:8px 10px;text-align:right;">' + (r.standardHours || '-') + 'h</td>';
+      html += '<td style="padding:8px 10px;text-align:right;">' + (r.actualHours || '-') + 'h</td>';
+      html += '<td style="padding:8px 10px;text-align:right;">' + (r.actualPH ? fmtPH(r.actualPH) : '-') + '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+    content.innerHTML = html;
+  }
 }
 
 function closeCloudData() {
@@ -2016,7 +2137,7 @@ function setTimeFilter(dimension) {
     btn.classList.toggle('active', btn.getAttribute('data-param') === dimension);
   });
   renderDatePicker();
-  renderDashboard();
+  refreshDashboardData();
 }
 
 // ==================== DATE PICKER ====================
@@ -2029,7 +2150,7 @@ function renderDatePicker() {
     if (dashboardDateFilter) inp.value = dashboardDateFilter;
     inp.addEventListener("change", function() {
       dashboardDateFilter = this.value;
-      renderDashboard();
+      refreshDashboardData();
     });
   } else if (dashboardTimeFilter === "week") {
     wrap.innerHTML = '<label>选择日期(自动算周)</label><input type="date" class="date-picker-input" id="date-picker-week" />';
@@ -2048,7 +2169,7 @@ function renderDatePicker() {
     }
     inp.addEventListener("change", function() {
       dashboardDateFilter = getISOWeek(this.value);
-      renderDashboard();
+      refreshDashboardData();
     });
   } else {
     wrap.innerHTML = '<label>选择月份</label><input type="month" class="date-picker-input" id="date-picker-month" />';
@@ -2056,11 +2177,95 @@ function renderDatePicker() {
     if (dashboardDateFilter) inp.value = dashboardDateFilter;
     inp.addEventListener("change", function() {
       dashboardDateFilter = this.value;
-      renderDashboard();
+      refreshDashboardData();
     });
   }
 }
-var cloudDashboardRecords = []; // cloud records for dashboard
+
+// Re-fetch cloud data if the view's months changed; otherwise just re-render
+function refreshDashboardData() {
+  var key = getViewMonths().join(",");
+  if (key !== loadedViewKey) {
+    document.getElementById("dashboard-sub").textContent = '正在加载云端数据...';
+    loadCloudDataForView(function(recs) {
+      cloudDashboardRecords = recs;
+      renderDashboard();
+    }, function() {
+      renderDashboard();
+    });
+  } else {
+    renderDashboard();
+  }
+}
+var cloudDashboardRecords = []; // cloud records for dashboard (main + archives merged)
+var loadedViewKey = ""; // which months are currently loaded
+
+// Determine which months the current view needs: selected month ± 1
+function getViewMonths() {
+  var base = null;
+  if (dashboardTimeFilter === "month" && dashboardDateFilter && /^\d{4}-\d{2}$/.test(dashboardDateFilter)) {
+    base = dashboardDateFilter;
+  } else if (dashboardDateFilter && /^\d{4}-\d{2}-\d{2}$/.test(dashboardDateFilter)) {
+    base = dashboardDateFilter.slice(0, 7);
+  } else if (dashboardDateFilter && /^\d{4}-W\d{2}$/.test(dashboardDateFilter)) {
+    // week view: derive Monday's month
+    var parts = dashboardDateFilter.split("-W");
+    var jan4 = new Date(parseInt(parts[0]), 0, 4);
+    var monWeek1 = new Date(jan4);
+    monWeek1.setDate(jan4.getDate() - (jan4.getDay() + 6) % 7);
+    var monday = new Date(monWeek1);
+    monday.setDate(monWeek1.getDate() + (parseInt(parts[1]) - 1) * 7);
+    base = monday.toISOString().slice(0, 7);
+  }
+  if (!base) base = new Date().toISOString().slice(0, 7);
+  var months = [base];
+  // previous month
+  var y = parseInt(base.slice(0, 4)), m = parseInt(base.slice(5, 7));
+  m--; if (m === 0) { m = 12; y--; }
+  months.push(y + "-" + String(m).padStart(2, "0"));
+  // next month (week views may spill over)
+  var y2 = parseInt(base.slice(0, 4)), m2 = parseInt(base.slice(5, 7));
+  m2++; if (m2 === 13) { m2 = 1; y2++; }
+  months.push(y2 + "-" + String(m2).padStart(2, "0"));
+  return months;
+}
+
+// Fetch main bin + archive bins for the given months in parallel, merge, callback
+function loadCloudDataForView(onDone, onError) {
+  var months = getViewMonths();
+  var urls = [JSONBIN_BASE_URL];
+  months.forEach(function(mo) {
+    if (ARCHIVE_BINS[mo]) urls.push(archiveUrl(mo));
+  });
+  var merged = [];
+  var pending = urls.length;
+  var anySuccess = false;
+  urls.forEach(function(url) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', url + '/latest', true);
+    xhr.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
+    xhr.timeout = 10000;
+    xhr.onload = function() {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        anySuccess = true;
+        try {
+          var resp = JSON.parse(xhr.responseText);
+          var data = resp.record || {};
+          merged = mergeCloudRecords(merged, data.records || []);
+        } catch(e) {}
+      }
+      pending--;
+      if (pending === 0) {
+        if (anySuccess) { loadedViewKey = months.join(","); onDone(merged); }
+        else if (onError) onError();
+      }
+    };
+    xhr.onerror = function() { pending--; if (pending === 0) { if (anySuccess) { loadedViewKey = months.join(","); onDone(merged); } else if (onError) onError(); } };
+    xhr.ontimeout = function() { pending--; if (pending === 0) { if (anySuccess) { loadedViewKey = months.join(","); onDone(merged); } else if (onError) onError(); } };
+    xhr.send();
+  });
+}
+
 function showDashboard() {
   document.getElementById("welcome").classList.add("hidden");
   document.getElementById("interview").classList.add("hidden");
@@ -2077,33 +2282,14 @@ function showDashboard() {
     btn.classList.toggle('active', btn.getAttribute('data-param') === dashboardTimeFilter);
   });
   renderDatePicker();
-  // Auto-fetch cloud data and render dashboard
+  // Auto-fetch cloud data (main + relevant archives) and render dashboard
   document.getElementById("dashboard-sub").textContent = '正在加载云端数据...';
-  var xhr = new XMLHttpRequest();
-  xhr.open('GET', JSONBIN_BASE_URL + '/latest', true);
-  xhr.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
-  xhr.timeout = 10000;
-  xhr.onload = function() {
-    if (xhr.status >= 200 && xhr.status < 300) {
-      try {
-        var resp = JSON.parse(xhr.responseText);
-        var data = resp.record || {};
-        cloudDashboardRecords = data.records || [];
-        renderDashboard();
-      } catch(e) {
-        document.getElementById("dashboard-sub").textContent = '云端数据加载失败';
-      }
-    } else {
-      document.getElementById("dashboard-sub").textContent = '云端数据加载失败 (HTTP ' + xhr.status + ')';
-    }
-  };
-  xhr.onerror = function() {
+  loadCloudDataForView(function(recs) {
+    cloudDashboardRecords = recs;
+    renderDashboard();
+  }, function() {
     document.getElementById("dashboard-sub").textContent = '网络错误，无法加载云端数据';
-  };
-  xhr.ontimeout = function() {
-    document.getElementById("dashboard-sub").textContent = '请求超时';
-  };
-  xhr.send();
+  });
 }
 function startInterview() {
   currentStep = 0;
