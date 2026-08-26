@@ -1796,11 +1796,11 @@ function loadSheetJS(callback) {
   document.head.appendChild(s);
 }
 
-// Build one data row (32 cols) from a record
-// Base col order: 日期,提交时间,班组,分析模式,有效工时,实际工时(h),DLE(%),损失工时,效率状态
+// Build one data row (31 cols) from a record
+// Base col order: 日期,提交时间,班组,有效工时,实际工时(h),DLE(%),损失工时,效率状态
 function buildTemplateRow(r) {
   var lossHours = (r.abnormalReasons || []).reduce(function(s, a) { return s + (a.hours || 0); }, 0);
-  var row = new Array(32).fill('');
+  var row = new Array(31).fill('');
   row[0] = r.date || '';
   row[1] = r.submitTime || '';
   row[2] = r.teamName || '';
@@ -1811,14 +1811,13 @@ function buildTemplateRow(r) {
     dle = ah0 > 0 ? eh0 / ah0 : 0;
   }
   var effH = r.effectiveHours != null ? r.effectiveHours : r.standardHours;
-  row[3] = 'DLE分析';
-  row[4] = effH != null ? effH : '';  // 有效工时
-  row[5] = r.actualHours || '';       // 实际工时(h)
-  row[6] = Number((dle * 100).toFixed(1)); // DLE(%)
-  row[7] = Number(lossHours.toFixed(1));   // 损失工时
-  row[8] = dle < 1.0 ? 'DLE需分析' : 'DLE正常'; // 效率状态
-  // Reason groups starting col 9
-  var col = 9;
+  row[3] = effH != null ? effH : '';  // 有效工时
+  row[4] = r.actualHours || '';       // 实际工时(h)
+  row[5] = Number((dle * 100).toFixed(1)); // DLE(%)
+  row[6] = Number(lossHours.toFixed(1));   // 损失工时
+  row[7] = dle < 1.0 ? 'DLE需分析' : 'DLE正常'; // 效率状态
+  // Reason groups starting col 8
+  var col = 8;
   EXPORT_REASON_GROUPS.forEach(function(g) {
     var entries = (r.abnormalReasons || []).filter(function(a) { return a.reason === g.name; });
     if (entries.length > 0) {
@@ -1846,9 +1845,9 @@ function buildTemplateRow(r) {
 
 function exportTemplateXLSX(records, filename) {
   loadSheetJS(function(failed) {
-    var header1 = ['日期','提交时间','班组','分析模式','有效工时','实际工时(h)','DLE(%)','损失工时','效率状态'];
-    var header2 = new Array(9).fill('');
-    var totalCols = 9;
+    var header1 = ['日期','提交时间','班组','有效工时','实际工时(h)','DLE(%)','损失工时','效率状态'];
+    var header2 = new Array(8).fill('');
+    var totalCols = 8;
     EXPORT_REASON_GROUPS.forEach(function(g) {
       // Row 1: only the FIRST cell of each group carries the name (undefined for
       // the rest) — merged range keeps the value visible across all group cols
@@ -1883,10 +1882,10 @@ function exportTemplateXLSX(records, filename) {
 
     var aoa = [header1, header2].concat(dataRows);
     var ws = XLSX.utils.aoa_to_sheet(aoa);
-    // Merges: A1:A2..I1:I2 (base cols), then each group header spans its cols in row 1
+    // Merges: A1:A2..H1:H2 (base cols), then each group header spans its cols in row 1
     var merges = [];
-    for (var c = 0; c < 9; c++) merges.push({ s: { r: 0, c: c }, e: { r: 1, c: c } });
-    var colStart = 9;
+    for (var c = 0; c < 8; c++) merges.push({ s: { r: 0, c: c }, e: { r: 1, c: c } });
+    var colStart = 8;
     EXPORT_REASON_GROUPS.forEach(function(g) {
       merges.push({ s: { r: 0, c: colStart }, e: { r: 0, c: colStart + g.cols.length - 1 } });
       colStart += g.cols.length;
@@ -1894,7 +1893,7 @@ function exportTemplateXLSX(records, filename) {
     ws['!merges'] = merges;
     // Column widths
     var widths = [];
-    for (var w = 0; w < totalCols; w++) widths.push({ wch: w < 9 ? 12 : 14 });
+    for (var w = 0; w < totalCols; w++) widths.push({ wch: w < 8 ? 12 : 14 });
     ws['!cols'] = widths;
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
