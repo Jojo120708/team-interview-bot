@@ -669,36 +669,32 @@ var JSONBIN_BASE_URL = "https://api.jsonbin.io/v3/b/" + JSONBIN_BIN_ID;
 var ADMIN_PASSWORD = "minth2026";
 
 // Monthly archive bins: records older than the main-bin rolling window are
-// archived here (compacted) so month views keep full history.
+// archived here WITH FULL DETAIL (no compaction). Each month has 2 bins (a/b)
+// because a full month with detail (~160KB) exceeds the 100KB single-bin limit;
+// the archive writer splits records into ≤90KB chunks across the bins.
 var ARCHIVE_BINS = {
-  "2026-08": "6a8e5772da38895dfe11396b",
-  "2026-09": "6a8e5773f5f4af5e2942cda2",
-  "2026-10": "6a8e5775f5f4af5e2942cda3",
-  "2026-11": "6a8e5777da38895dfe113978",
-  "2026-12": "6a8e5778da38895dfe113979",
-  "2027-01": "6a8e5779da38895dfe11397a",
-  "2027-02": "6a8e577bf5f4af5e2942cdbb",
-  "2027-03": "6a8e577df5f4af5e2942cdbc",
-  "2027-04": "6a8e577ef5f4af5e2942cdbd",
-  "2027-05": "6a8e5780f5f4af5e2942cdc7",
-  "2027-06": "6a8e5783f5f4af5e2942cdc8",
-  "2027-07": "6a8e5784f5f4af5e2942cdc9",
-  "2027-08": "6a8e5787f5f4af5e2942cdd7",
-  "2027-09": "6a8e5789f5f4af5e2942cdd8",
-  "2027-10": "6a8e578af5f4af5e2942cde7",
-  "2027-11": "6a8e578bda38895dfe1139a3",
-  "2027-12": "6a8e578dda38895dfe1139a4"
+  "2026-08": ["6a8e5772da38895dfe11396b", "6a8e699fda38895dfe116dcf"],
+  "2026-09": ["6a8e5773f5f4af5e2942cda2", "6a8e69a1da38895dfe116dda"],
+  "2026-10": ["6a8e5775f5f4af5e2942cda3", "6a8e69a4f5f4af5e294301ad"],
+  "2026-11": ["6a8e5777da38895dfe113978", "6a8e69a6f5f4af5e294301bd"],
+  "2026-12": ["6a8e5778da38895dfe113979", "6a8e69a9da38895dfe116de9"],
+  "2027-01": ["6a8e5779da38895dfe11397a", "6a8e69abf5f4af5e294301cb"],
+  "2027-02": ["6a8e577bf5f4af5e2942cdbb", "6a8e69aff5f4af5e294301cc"],
+  "2027-03": ["6a8e577df5f4af5e2942cdbc", "6a8e69b1da38895dfe116dfc"],
+  "2027-04": ["6a8e577ef5f4af5e2942cdbd", "6a8e69b3f5f4af5e294301d9"],
+  "2027-05": ["6a8e5780f5f4af5e2942cdc7", "6a8e69b5da38895dfe116e0b"],
+  "2027-06": ["6a8e5783f5f4af5e2942cdc8", "6a8e69b8f5f4af5e294301e9"],
+  "2027-07": ["6a8e5784f5f4af5e2942cdc9", "6a8e69bada38895dfe116e18"],
+  "2027-08": ["6a8e5787f5f4af5e2942cdd7", "6a8e69bff5f4af5e294301fc"],
+  "2027-09": ["6a8e5789f5f4af5e2942cdd8", "6a8e69c1da38895dfe116e1e"],
+  "2027-10": ["6a8e578af5f4af5e2942cde7", "6a8e69c3da38895dfe116e1f"],
+  "2027-11": ["6a8e578bda38895dfe1139a3", "6a8e69c5da38895dfe116e29"],
+  "2027-12": ["6a8e578dda38895dfe1139a4", "6a8e69c6da38895dfe116e2a"]
 };
-function archiveUrl(monthKey) {
-  return "https://api.jsonbin.io/v3/b/" + ARCHIVE_BINS[monthKey];
-}
-
-// Compact a record for archiving: drop per-reason "data" objects (saves ~40%
-// space; archived records keep reason/hours/note for charts & notes display)
-function compactForArchive(r) {
-  var c = JSON.parse(JSON.stringify(r));
-  (c.abnormalReasons || []).forEach(function(a) { delete a.data; });
-  return c;
+function getArchiveUrls(monthKey) {
+  return (ARCHIVE_BINS[monthKey] || []).map(function(id) {
+    return "https://api.jsonbin.io/v3/b/" + id;
+  });
 }
 
 // Fetch a bin with retry; delay staggers requests to avoid JSONBin 429 rate limits
@@ -744,7 +740,10 @@ function getExistingArchiveMonths() {
   return out;
 }
 
-// Fire-and-forget: archive pruned old records into their monthly bins
+// Fire-and-forget: archive pruned old records into their monthly bins.
+// Records are stored WITH FULL DETAIL (no compaction). The month's bins (a/b)
+// are read, merged with the new records (newest submitTime wins per team+date),
+// then re-split into ≤90KB chunks across the bins to respect the 100KB limit.
 function archivePrunedRecords(pruned) {
   if (!pruned || pruned.length === 0) return;
   var byMonth = {};
@@ -752,44 +751,73 @@ function archivePrunedRecords(pruned) {
     var mo = (r.date || "").slice(0, 7);
     if (!/^\d{4}-\d{2}$/.test(mo) || !ARCHIVE_BINS[mo]) return;
     if (!byMonth[mo]) byMonth[mo] = [];
-    byMonth[mo].push(compactForArchive(r));
+    byMonth[mo].push(r);
   });
   Object.keys(byMonth).forEach(function(mo) {
-    var url = archiveUrl(mo);
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', url + '/latest', true);
-    xhr.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
-    xhr.timeout = 10000;
-    xhr.onload = function() {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          var resp = JSON.parse(xhr.responseText);
-          var data = resp.record || {};
-          var records = data.records || [];
-          var changed = false;
-          byMonth[mo].forEach(function(r) {
-            var exists = records.some(function(x) {
-              return x.teamName === r.teamName && x.date === r.date && x.submitTime === r.submitTime;
-            });
-            if (!exists) { records.push(r); changed = true; }
-          });
-          if (!changed) return;
-          var xhr2 = new XMLHttpRequest();
-          xhr2.open('PUT', url, true);
-          xhr2.setRequestHeader('Content-Type', 'application/json');
-          xhr2.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
-          xhr2.timeout = 10000;
-          xhr2.onload = function() { if (xhr2.status < 200 || xhr2.status >= 300) console.warn("[Archive] PUT failed " + xhr2.status); };
-          xhr2.onerror = function() { console.warn("[Archive] PUT error"); };
-          xhr2.send(JSON.stringify({ records: records }));
-        } catch(e) { console.warn("[Archive] parse error", e); }
-      } else {
-        console.warn("[Archive] GET failed " + xhr.status);
+    var urls = getArchiveUrls(mo);
+    var existing = [];
+    var pending = urls.length;
+    var finish = function() {
+      // Detect changes: any new record missing, or newer than what's stored
+      var changed = false;
+      byMonth[mo].forEach(function(r) {
+        var match = existing.some(function(x) {
+          return x.teamName === r.teamName && x.date === r.date && String(x.submitTime || "") >= String(r.submitTime || "");
+        });
+        if (!match) changed = true;
+      });
+      if (!changed) return;
+      // Merge (newest submitTime wins per team+date), then stable sort
+      existing = mergeCloudRecords(existing, byMonth[mo]);
+      existing.sort(function(a, b) {
+        return (a.date || "").localeCompare(b.date || "" ) || (a.teamName || "").localeCompare(b.teamName || "");
+      });
+      // Split into ≤90KB chunks
+      var chunks = [[]];
+      var size = 15; // {"records":[]} overhead
+      existing.forEach(function(r) {
+        var rlen = JSON.stringify(r).length + 1;
+        if (size + rlen > 90000 && chunks[chunks.length - 1].length > 0) {
+          chunks.push([]);
+          size = 15;
+        }
+        chunks[chunks.length - 1].push(r);
+        size += rlen;
+      });
+      // Write chunks to the month's bins (a then b)
+      chunks.forEach(function(chunk, ci) {
+        if (ci >= urls.length) {
+          console.warn("[Archive] " + mo + " capacity exceeded — " + (chunks.length - urls.length) + " chunk(s) dropped");
+          return;
+        }
+        var xhr2 = new XMLHttpRequest();
+        xhr2.open('PUT', urls[ci], true);
+        xhr2.setRequestHeader('Content-Type', 'application/json');
+        xhr2.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
+        xhr2.timeout = 15000;
+        xhr2.onload = function() { if (xhr2.status < 200 || xhr2.status >= 300) console.warn("[Archive] PUT " + mo + " bin" + ci + " failed " + xhr2.status); };
+        xhr2.onerror = function() { console.warn("[Archive] PUT error"); };
+        xhr2.send(JSON.stringify({ records: chunk }));
+      });
+      // Clear bins beyond the chunks written (e.g. b emptied by re-split)
+      for (var ci2 = chunks.length; ci2 < urls.length; ci2++) {
+        (function(url) {
+          var xhr3 = new XMLHttpRequest();
+          xhr3.open('PUT', url, true);
+          xhr3.setRequestHeader('Content-Type', 'application/json');
+          xhr3.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
+          xhr3.timeout = 15000;
+          xhr3.send(JSON.stringify({ records: [] }));
+        })(urls[ci2]);
       }
     };
-    xhr.onerror = function() { console.warn("[Archive] GET error"); };
-    xhr.ontimeout = function() { console.warn("[Archive] GET timeout"); };
-    xhr.send();
+    urls.forEach(function(url, i) {
+      fetchBinRecords(url, i * 200, function(ok, recs) {
+        if (ok) existing = mergeCloudRecords(existing, recs);
+        pending--;
+        if (pending === 0) finish();
+      });
+    });
   });
 }
 
@@ -1422,9 +1450,14 @@ function showCloudData() {
 
   // Fetch main bin + archive bins that may contain data (staggered to avoid 429)
   var months = getExistingArchiveMonths(); // oldest..current
-  var total = 1 + months.length;
+  var fetchList = [{ url: JSONBIN_BASE_URL, delay: 0 }]; // main bin first
+  months.forEach(function(mo) {
+    getArchiveUrls(mo).forEach(function(u, bi) {
+      fetchList.push({ url: u, delay: 300 + fetchList.length * 250 });
+    });
+  });
   var allMerged = [];
-  var allPending = total;
+  var allPending = fetchList.length;
   var anyOk = false;
   var doneOne = function(ok, recs) {
     if (ok) anyOk = true;
@@ -1432,9 +1465,8 @@ function showCloudData() {
     allPending--;
     if (allPending === 0) renderCloudSummary(anyOk ? allMerged : null);
   };
-  fetchBinRecords(JSONBIN_BASE_URL, 0, doneOne); // main bin first, no delay
-  months.forEach(function(mo, i) {
-    fetchBinRecords(archiveUrl(mo), 300 + i * 250, doneOne); // stagger 250ms apart
+  fetchList.forEach(function(f) {
+    fetchBinRecords(f.url, f.delay, doneOne);
   });
 }
 
@@ -1835,8 +1867,10 @@ function exportTemplateXLSX(records, filename) {
     var header2 = new Array(13).fill('');
     var totalCols = 13;
     EXPORT_REASON_GROUPS.forEach(function(g) {
+      // Row 1: only the FIRST cell of each group carries the name (undefined for
+      // the rest) — merged range keeps the value visible across all group cols
       header1.push(g.name);
-      for (var p = 1; p < g.cols.length; p++) header1.push('');
+      for (var p = 1; p < g.cols.length; p++) header1.push(undefined);
       header2 = header2.concat(g.cols);
       totalCols += g.cols.length;
     });
@@ -1844,7 +1878,7 @@ function exportTemplateXLSX(records, filename) {
 
     if (failed || !window.XLSX) {
       // Fallback: CSV with same 2-row header
-      var csv = '\uFEFF' + header1.join(',') + '\n' + header2.join(',') + '\n' +
+      var csv = '\uFEFF' + header1.map(function(h){ return h || ''; }).join(',') + '\n' + header2.join(',') + '\n' +
         dataRows.map(function(row) {
           return row.map(function(c) {
             var s = String(c);
@@ -2268,7 +2302,7 @@ function loadCloudDataForView(onDone, onError) {
   var months = getViewMonths();
   var urls = [JSONBIN_BASE_URL];
   months.forEach(function(mo) {
-    if (ARCHIVE_BINS[mo]) urls.push(archiveUrl(mo));
+    if (ARCHIVE_BINS[mo]) urls = urls.concat(getArchiveUrls(mo));
   });
   var merged = [];
   var pending = urls.length;
