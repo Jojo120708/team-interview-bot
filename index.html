@@ -780,6 +780,18 @@ function doCloudUpload(record, attempt, isRetry) {
           var resp = JSON.parse(xhr.responseText);
           var data = resp.record || {};
           var records = data.records || [];
+          // Auto-prune: drop records older than 15 days to keep bin under the
+          // 100KB free-plan size limit (cloud stores recent data; export xlsx for archive)
+          var cutoff = new Date();
+          cutoff.setDate(cutoff.getDate() - 15);
+          var cutoffStr = cutoff.toISOString().slice(0, 10);
+          var prunedCount = 0;
+          records = records.filter(function(r) {
+            var keep = !r.date || r.date >= cutoffStr;
+            if (!keep) prunedCount++;
+            return keep;
+          });
+          if (prunedCount > 0) console.log("[Cloud] Auto-pruned " + prunedCount + " old record(s) before " + cutoffStr);
           // Find existing record for same team+date (overwrite, one per team per day)
           var existIdx = -1;
           for (var i = 0; i < records.length; i++) {
