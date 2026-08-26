@@ -669,18 +669,39 @@ var JSONBIN_BASE_URL = "https://api.jsonbin.io/v3/b/" + JSONBIN_BIN_ID;
 var ADMIN_PASSWORD = "minth2026";
 
 // Toast notification helper
-function showCloudToast(msg, type) {
+// type: "success" | "error" | "warning" | "syncing"
+function showCloudToast(msg, type, sticky) {
   var existing = document.getElementById("cloud-toast");
   if (existing) existing.remove();
   var toast = document.createElement("div");
   toast.id = "cloud-toast";
-  var bg = type === "success" ? "#ECFDF5" : type === "error" ? "#FEF2F2" : "#FFFBEB";
-  var border = type === "success" ? "#059669" : type === "error" ? "#DC2626" : "#D97706";
-  var color = type === "success" ? "#065F46" : type === "error" ? "#991B1B" : "#92400E";
+  var bg = type === "success" ? "#ECFDF5" : type === "error" ? "#FEF2F2" : type === "syncing" ? "#EFF6FF" : "#FFFBEB";
+  var border = type === "success" ? "#059669" : type === "error" ? "#DC2626" : type === "syncing" ? "#3B82F6" : "#D97706";
+  var color = type === "success" ? "#065F46" : type === "error" ? "#991B1B" : type === "syncing" ? "#1E40AF" : "#92400E";
   toast.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);background:" + bg + ";border:2px solid " + border + ";border-radius:12px;padding:12px 22px;z-index:10000;max-width:420px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,0.15);font-size:13px;color:" + color + ";line-height:1.5;transition:opacity 0.4s;";
-  toast.innerHTML = msg;
+  if (type === "syncing") {
+    // Spinning indicator + text
+    var spinner = document.createElement("span");
+    spinner.style.cssText = "display:inline-block;width:14px;height:14px;border:2px solid #3B82F6;border-top-color:transparent;border-radius:50%;margin-right:8px;vertical-align:-2px;animation:cloudspin 0.8s linear infinite;";
+    // Ensure keyframes exist
+    if (!document.getElementById("cloudspin-style")) {
+      var st = document.createElement("style");
+      st.id = "cloudspin-style";
+      st.textContent = "@keyframes cloudspin{to{transform:rotate(360deg)}}";
+      document.head.appendChild(st);
+    }
+    toast.appendChild(spinner);
+    var txt = document.createElement("span");
+    txt.textContent = msg;
+    toast.appendChild(txt);
+  } else {
+    toast.innerHTML = msg;
+  }
   document.body.appendChild(toast);
-  setTimeout(function() { toast.style.opacity = "0"; setTimeout(function() { toast.remove(); }, 500); }, 4000);
+  if (!sticky) {
+    setTimeout(function() { toast.style.opacity = "0"; setTimeout(function() { toast.remove(); }, 500); }, 4000);
+  }
+  return toast;
 }
 
 // Pending upload queue (localStorage) for failed uploads
@@ -875,6 +896,8 @@ function uploadRecordToCloud(record) {
   // fires (mobile users often close right after submitting), the record stays
   // in the pending queue and is retried on next page load.
   enqueueUpload(record);
+  // Show "syncing" indicator immediately; it stays until success/failure replaces it
+  showCloudToast("正在同步到云端...", "syncing", true);
   doCloudUpload(record, 0, false);
 }
 
