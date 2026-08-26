@@ -1498,25 +1498,23 @@ function renderCloudSummary(cloudRecords) {
     html += '<thead><tr style="background:#F3F4F6;">';
     html += '<th style="padding:8px 10px;text-align:left;border-bottom:2px solid #E5E7EB;">日期</th>';
     html += '<th style="padding:8px 10px;text-align:left;border-bottom:2px solid #E5E7EB;">班组</th>';
-    html += '<th style="padding:8px 10px;text-align:right;border-bottom:2px solid #E5E7EB;">目标产值</th>';
-    html += '<th style="padding:8px 10px;text-align:right;border-bottom:2px solid #E5E7EB;">实际产值</th>';
-    html += '<th style="padding:8px 10px;text-align:right;border-bottom:2px solid #E5E7EB;">达成率</th>';
-    html += '<th style="padding:8px 10px;text-align:right;border-bottom:2px solid #E5E7EB;">计划工时</th>';
+    html += '<th style="padding:8px 10px;text-align:right;border-bottom:2px solid #E5E7EB;">DLE(%)</th>';
+    html += '<th style="padding:8px 10px;text-align:right;border-bottom:2px solid #E5E7EB;">有效工时</th>';
     html += '<th style="padding:8px 10px;text-align:right;border-bottom:2px solid #E5E7EB;">实际工时</th>';
-    html += '<th style="padding:8px 10px;text-align:right;border-bottom:2px solid #E5E7EB;">人时产值</th>';
     html += '</tr></thead><tbody>';
     cloudRecords.forEach(function(r) {
-      var compRate = r.targetValue > 0 ? (r.actualValue / r.targetValue * 100) : 0;
-      var rateColor = compRate >= 100 ? '#059669' : compRate >= 90 ? '#D97706' : '#DC2626';
+      var isDLEr = r.isDLE || r.teamName === '二部一课' || r.teamName === '二部二课';
+      var dleV = r.dle;
+      if (dleV == null && isDLEr) {
+        dleV = (Number(r.actualHours) > 0) ? (Number(r.effectiveHours) / Number(r.actualHours)) : 0;
+      }
+      var dleColor = (dleV != null && dleV < 1.0) ? '#DC2626' : '#059669';
       html += '<tr style="border-bottom:1px solid #F3F4F6;">';
       html += '<td style="padding:8px 10px;">' + (r.date || '-') + '</td>';
       html += '<td style="padding:8px 10px;font-weight:600;">' + (r.teamName || '-') + '</td>';
-      html += '<td style="padding:8px 10px;text-align:right;">' + fmtW(r.targetValue) + '</td>';
-      html += '<td style="padding:8px 10px;text-align:right;">' + fmtW(r.actualValue) + '</td>';
-      html += '<td style="padding:8px 10px;text-align:right;color:' + rateColor + ';font-weight:600;">' + compRate.toFixed(1) + '%</td>';
-      html += '<td style="padding:8px 10px;text-align:right;">' + (r.standardHours || '-') + 'h</td>';
+      html += '<td style="padding:8px 10px;text-align:right;color:' + dleColor + ';font-weight:600;">' + (dleV != null ? (dleV * 100).toFixed(1) + '%' : '-') + '</td>';
+      html += '<td style="padding:8px 10px;text-align:right;">' + (r.effectiveHours != null ? r.effectiveHours + 'h' : (r.standardHours || '-') + 'h') + '</td>';
       html += '<td style="padding:8px 10px;text-align:right;">' + (r.actualHours || '-') + 'h</td>';
-      html += '<td style="padding:8px 10px;text-align:right;">' + (r.actualPH ? fmtPH(r.actualPH) : '-') + '</td>';
       html += '</tr>';
     });
     html += '</tbody></table></div>';
@@ -1798,44 +1796,29 @@ function loadSheetJS(callback) {
   document.head.appendChild(s);
 }
 
-// Build one data row (36 cols) from a record
-// Base col order: 日期,提交时间,班组,分析模式,目标产值,实际产值,人时产值,产值状态,计划工时/有效工时,实际工时(h),DLE(%)/达成率,损失工时,效率状态
+// Build one data row (32 cols) from a record
+// Base col order: 日期,提交时间,班组,分析模式,有效工时,实际工时(h),DLE(%),损失工时,效率状态
 function buildTemplateRow(r) {
   var lossHours = (r.abnormalReasons || []).reduce(function(s, a) { return s + (a.hours || 0); }, 0);
-  var row = new Array(36).fill('');
+  var row = new Array(32).fill('');
   row[0] = r.date || '';
   row[1] = r.submitTime || '';
   row[2] = r.teamName || '';
-  if (r.isDLE) {
-    var dle = r.dle || 0;
-    var eh = r.effectiveHours || 0;
-    var ah = r.actualHours || 0;
-    var dleThr = 1.00;
-    row[3] = 'DLE分析';
-    row[7] = '—';        // 产值状态
-    row[8] = eh;         // 计划工时/有效工时
-    row[9] = ah;         // 实际工时(h)
-    row[10] = Number((dle * 100).toFixed(1)); // DLE(%)/达成率
-    row[11] = Number(lossHours.toFixed(1));   // 损失工时
-    row[12] = dle < dleThr ? 'DLE需分析' : 'DLE正常'; // 效率状态
-  } else {
-    var compRate = r.targetValue > 0 ? (r.actualValue / r.targetValue) * 100 : 0;
-    var isLowTarget = (r.targetValue || 0) < 1;
-    var plannedPH = r.standardHours > 0 ? r.targetValue * 10000 / r.standardHours : 0;
-    var actualPH = r.actualHours > 0 ? r.actualValue * 10000 / r.actualHours : 0;
-    row[3] = '人时产值分析';
-    row[4] = r.targetValue || '';   // 目标产值
-    row[5] = r.actualValue || '';   // 实际产值
-    row[6] = Number((r.actualPH || actualPH).toFixed(1)); // 人时产值
-    row[7] = isLowTarget ? '—' : (r.actualValue >= r.targetValue ? '达标' : '未达标'); // 产值状态
-    row[8] = r.standardHours || ''; // 计划工时
-    row[9] = r.actualHours || '';   // 实际工时(h)
-    row[10] = Number(compRate.toFixed(1)); // 达成率
-    row[11] = Number(lossHours.toFixed(1)); // 损失工时
-    row[12] = isLowTarget ? '需分析' : (actualPH >= plannedPH ? '达标' : '未达标'); // 效率状态
+  var dle = r.dle;
+  if (dle == null) {
+    var eh0 = Number(r.effectiveHours) || 0;
+    var ah0 = Number(r.actualHours) || 0;
+    dle = ah0 > 0 ? eh0 / ah0 : 0;
   }
-  // Reason groups starting col 13
-  var col = 13;
+  var effH = r.effectiveHours != null ? r.effectiveHours : r.standardHours;
+  row[3] = 'DLE分析';
+  row[4] = effH != null ? effH : '';  // 有效工时
+  row[5] = r.actualHours || '';       // 实际工时(h)
+  row[6] = Number((dle * 100).toFixed(1)); // DLE(%)
+  row[7] = Number(lossHours.toFixed(1));   // 损失工时
+  row[8] = dle < 1.0 ? 'DLE需分析' : 'DLE正常'; // 效率状态
+  // Reason groups starting col 9
+  var col = 9;
   EXPORT_REASON_GROUPS.forEach(function(g) {
     var entries = (r.abnormalReasons || []).filter(function(a) { return a.reason === g.name; });
     if (entries.length > 0) {
@@ -1863,9 +1846,9 @@ function buildTemplateRow(r) {
 
 function exportTemplateXLSX(records, filename) {
   loadSheetJS(function(failed) {
-    var header1 = ['日期','提交时间','班组','分析模式','目标产值','实际产值','人时产值','产值状态','计划工时/有效工时','实际工时(h)','DLE(%)/达成率','损失工时','效率状态'];
-    var header2 = new Array(13).fill('');
-    var totalCols = 13;
+    var header1 = ['日期','提交时间','班组','分析模式','有效工时','实际工时(h)','DLE(%)','损失工时','效率状态'];
+    var header2 = new Array(9).fill('');
+    var totalCols = 9;
     EXPORT_REASON_GROUPS.forEach(function(g) {
       // Row 1: only the FIRST cell of each group carries the name (undefined for
       // the rest) — merged range keeps the value visible across all group cols
@@ -1900,10 +1883,10 @@ function exportTemplateXLSX(records, filename) {
 
     var aoa = [header1, header2].concat(dataRows);
     var ws = XLSX.utils.aoa_to_sheet(aoa);
-    // Merges: A1:A2..M1:M2 (base cols), then each group header spans its cols in row 1
+    // Merges: A1:A2..I1:I2 (base cols), then each group header spans its cols in row 1
     var merges = [];
-    for (var c = 0; c < 13; c++) merges.push({ s: { r: 0, c: c }, e: { r: 1, c: c } });
-    var colStart = 13;
+    for (var c = 0; c < 9; c++) merges.push({ s: { r: 0, c: c }, e: { r: 1, c: c } });
+    var colStart = 9;
     EXPORT_REASON_GROUPS.forEach(function(g) {
       merges.push({ s: { r: 0, c: colStart }, e: { r: 0, c: colStart + g.cols.length - 1 } });
       colStart += g.cols.length;
@@ -1911,7 +1894,7 @@ function exportTemplateXLSX(records, filename) {
     ws['!merges'] = merges;
     // Column widths
     var widths = [];
-    for (var w = 0; w < totalCols; w++) widths.push({ wch: w < 13 ? 12 : 14 });
+    for (var w = 0; w < totalCols; w++) widths.push({ wch: w < 9 ? 12 : 14 });
     ws['!cols'] = widths;
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
@@ -3773,15 +3756,11 @@ function renderDashboard() {
   const content = document.getElementById("dashboard-content");
 
   const n = displayData.length;
-  // Company DLE = sum(standard hours) / sum(actual hours) across all submitted records
+  // Company DLE = sum(effective hours) / sum(actual hours) across all submitted records
   const totalLoss = displayData.reduce((s, r) => s + r.abnormalReasons.reduce((ss, a) => ss + a.hours, 0), 0);
   const totalActual = displayData.reduce((s, r) => s + r.actualHours, 0);
-  const totalStandardAll = displayData.reduce((s, r) => s + (r.standardHours || r.effectiveHours || 0), 0);
+  const totalStandardAll = displayData.reduce((s, r) => s + (r.effectiveHours != null ? r.effectiveHours : (r.standardHours || 0)), 0);
   const companyDLE = totalActual > 0 ? (totalStandardAll / totalActual) * 100 : 0;
-  const nonDLERecords = displayData.filter(r => !r.isDLE);
-  const totalStandard = nonDLERecords.reduce((s, r) => s + r.standardHours, 0);
-  const totalTarget = nonDLERecords.reduce((s, r) => s + r.targetValue, 0);
-  const totalActualVal = nonDLERecords.reduce((s, r) => s + r.actualValue, 0);
 
   const reasonAgg = {};
   displayData.forEach(r => r.abnormalReasons.forEach(a => { reasonAgg[a.reason] = (reasonAgg[a.reason]||0) + a.hours; }));
@@ -3792,8 +3771,7 @@ function renderDashboard() {
   // KPI Cards
   html += '<div class="kpi-grid">';
   html += '<div class="kpi-card"><div class="kpi-header"><div class="kpi-icon" style="background:#EEF2FF"><svg viewBox="0 0 24 24" fill="none" stroke="#4F46E5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><span class="kpi-label">'+(dashboardTimeFilter === "day" ? "班组数量" : "时段数量")+'</span></div><div class="kpi-value">'+n+'</div></div>';
-  html += '<div class="kpi-card"><div class="kpi-header"><div class="kpi-icon" style="background:#ECFDF5"><svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><span class="kpi-label">DLE</span></div><div class="kpi-value" style="color:'+(companyDLE>=100?"#10B981":"#EF4444")+'">'+companyDLE.toFixed(1)+'%</div><div class="kpi-sub">标准 '+totalStandardAll.toFixed(1)+'h / 实际 '+totalActual+'h</div></div>';
-  html += '<div class="kpi-card"><div class="kpi-header"><div class="kpi-icon" style="background:#EFF6FF"><svg viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div><span class="kpi-label">总产值/目标(万元)</span></div><div class="kpi-value" style="font-size:16px">'+fmtW(totalActualVal)+'</div><div class="kpi-sub">目标 '+fmtW(totalTarget)+'</div></div>';
+  html += '<div class="kpi-card"><div class="kpi-header"><div class="kpi-icon" style="background:#ECFDF5"><svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><span class="kpi-label">DLE</span></div><div class="kpi-value" style="color:'+(companyDLE>=100?"#10B981":"#EF4444")+'">'+companyDLE.toFixed(1)+'%</div><div class="kpi-sub">有效 '+totalStandardAll.toFixed(1)+'h / 实际 '+totalActual+'h</div></div>';
   html += '<div class="kpi-card"><div class="kpi-header"><div class="kpi-icon" style="background:#FEF2F2"><svg viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><span class="kpi-label">总损失工时</span></div><div class="kpi-value" style="color:'+(totalLoss>0?"#EF4444":"#10B981")+'">'+totalLoss.toFixed(1)+'</div><div class="kpi-sub">实际总工时 '+totalActual+'h / 有效 '+totalStandardAll.toFixed(1)+'h</div></div>';
   html += '</div>';
 
@@ -3814,7 +3792,7 @@ function renderDashboard() {
   var dateColHeader = isDayView ? '<th>日期</th>' : '';
   var recordLabel = isDayView ? displayData.length + ' 条记录' : displayData.length + ' 个班组';
   var exportBtn = '<button class="btn-export" data-action="exportData" style="margin-left:auto;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>导出明细数据</button>';
-  html += '<div class="table-card"><div class="table-header" style="display:flex;align-items:center;"><h3>'+tableTitle+'</h3><span style="margin-left:8px;">'+recordLabel+'</span>'+exportBtn+'</div><div class="table-wrap"><table><thead><tr><th>班组</th><th>提交时间</th>'+dateColHeader+'<th>实际DLE</th><th>实际工时</th><th>标准工时</th><th>损失工时</th><th>差距覆盖</th><th>效率状态</th><th></th></tr></thead><tbody>';
+  html += '<div class="table-card"><div class="table-header" style="display:flex;align-items:center;"><h3>'+tableTitle+'</h3><span style="margin-left:8px;">'+recordLabel+'</span>'+exportBtn+'</div><div class="table-wrap"><table><thead><tr><th>班组</th><th>提交时间</th>'+dateColHeader+'<th>实际DLE</th><th>实际工时</th><th>有效工时</th><th>损失工时</th><th>差距覆盖</th><th>效率状态</th><th></th></tr></thead><tbody>';
   displayData.forEach(r => {
     const lossHours = r.abnormalReasons.reduce((s, a) => s + a.hours, 0);
     const expanded = showDetailId === r.id;
