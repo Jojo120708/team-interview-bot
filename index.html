@@ -711,8 +711,8 @@ function fetchBinRecords(url, delayMs, onDone) {
             var resp = JSON.parse(xhr.responseText);
             onDone(true, ((resp.record || {}).records) || []);
           } catch(e) { onDone(false, []); }
-        } else if ((xhr.status === 429 || xhr.status >= 500) && tries > 0) {
-          setTimeout(function() { attemptGet(tries - 1); }, 1500);
+        } else if ((xhr.status === 429 || xhr.status === 403 || xhr.status >= 500) && tries > 0) {
+          setTimeout(function() { attemptGet(tries - 1); }, 1500); // 429=rate limit, 403=transient block, 5xx=server
         } else {
           onDone(false, []);
         }
@@ -1673,34 +1673,42 @@ function clearAllCloudData() {
   if (!confirm('再次确认：清空后数据无法找回，是否继续？')) return;
   var content = document.getElementById('cloud-data-content');
   if (content) content.innerHTML = '<div style="text-align:center;padding:40px 0;color:#6B7280;">正在清空数据...</div>';
-  var xhr = new XMLHttpRequest();
-  xhr.open('PUT', JSONBIN_BASE_URL, true);
-  xhr.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
-  xhr.setRequestHeader('Content-Type', 'application/json');
-  xhr.timeout = 15000;
-  xhr.onload = function() {
-    if (xhr.status >= 200 && xhr.status < 300) {
-      cloudRecordsCache = [];
-      cloudDashboardRecords = [];
-      var content = document.getElementById('cloud-data-content');
-      if (content) content.innerHTML = '<div style="text-align:center;padding:40px 0;">' +
-        '<svg viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" style="width:40px;height:40px;margin-bottom:12px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>' +
-        '<div style="font-size:15px;font-weight:600;color:#059669;">数据已清空</div>' +
-        '<div style="font-size:12px;color:#6B7280;margin-top:6px;">所有云端记录已删除</div>' +
-        '<button data-action="backToCloudData" style="margin-top:16px;padding:8px 24px;border-radius:8px;border:1.5px solid #D1D5DB;background:#fff;color:#374151;font-size:12px;font-weight:600;cursor:pointer;">返回</button>' +
-        '</div>';
-    } else {
-      var content = document.getElementById('cloud-data-content');
-      if (content) content.innerHTML = '<div style="color:#DC2626;padding:20px 0;">清空失败 (HTTP ' + xhr.status + ')</div>' +
-        '<button data-action="backToCloudData" style="margin-top:12px;padding:8px 24px;border-radius:8px;border:1.5px solid #D1D5DB;background:#fff;color:#374151;font-size:12px;font-weight:600;cursor:pointer;">返回</button>';
-    }
-  };
-  xhr.onerror = function() {
-    var content = document.getElementById('cloud-data-content');
-    if (content) content.innerHTML = '<div style="color:#DC2626;">网络错误</div>' +
-      '<button data-action="backToCloudData" style="margin-top:12px;padding:8px 24px;border-radius:8px;border:1.5px solid #D1D5DB;background:#fff;color:#374151;font-size:12px;font-weight:600;cursor:pointer;">返回</button>';
-  };
-  xhr.send(JSON.stringify({ records: [] }));
+  // Clear main bin AND all archive bins that may contain data
+  var targets = [{ url: JSONBIN_BASE_URL }];
+  getExistingArchiveMonths().forEach(function(mo) {
+    getArchiveUrls(mo).forEach(function(u) { targets.push({ url: u }); });
+  });
+  var pending = targets.length;
+  var failMsg = null;
+  targets.forEach(function(t) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('PUT', t.url, true);
+    xhr.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.timeout = 15000;
+    xhr.onload = function() {
+      if (xhr.status < 200 || xhr.status >= 300) failMsg = failMsg || ('清空失败 (HTTP ' + xhr.status + ')');
+      pending--;
+      if (pending === 0) {
+        if (failMsg) {
+          if (content) content.innerHTML = '<div style="color:#DC2626;padding:20px 0;">' + failMsg + '</div>' +
+            '<button data-action="backToCloudData" style="margin-top:12px;padding:8px 24px;border-radius:8px;border:1.5px solid #D1D5DB;background:#fff;color:#374151;font-size:12px;font-weight:600;cursor:pointer;">返回</button>';
+          return;
+        }
+        cloudRecordsCache = [];
+        cloudDashboardRecords = [];
+        if (content) content.innerHTML = '<div style="text-align:center;padding:40px 0;">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" style="width:40px;height:40px;margin-bottom:12px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>' +
+          '<div style="font-size:15px;font-weight:600;color:#059669;">数据已清空</div>' +
+          '<div style="font-size:12px;color:#6B7280;margin-top:6px;">所有云端记录已删除</div>' +
+          '<button data-action="backToCloudData" style="margin-top:16px;padding:8px 24px;border-radius:8px;border:1.5px solid #D1D5DB;background:#fff;color:#374151;font-size:12px;font-weight:600;cursor:pointer;">返回</button>' +
+          '</div>';
+      }
+    };
+    xhr.onerror = function() { failMsg = failMsg || '清空失败：网络错误'; pending--; if (pending === 0) { if (content) content.innerHTML = '<div style="color:#DC2626;padding:20px 0;">' + failMsg + '</div>' +
+      '<button data-action="backToCloudData" style="margin-top:12px;padding:8px 24px;border-radius:8px;border:1.5px solid #D1D5DB;background:#fff;color:#374151;font-size:12px;font-weight:600;cursor:pointer;">返回</button>'; } };
+    xhr.send(JSON.stringify({ records: [] }));
+  });
 }
 
 function deleteCloudRecord(indexStr) {
@@ -1711,7 +1719,6 @@ function deleteCloudRecord(indexStr) {
   var confirmMsg = '确定删除这条记录吗？\n\n';
   confirmMsg += '班组：' + (rec.teamName || '-') + '\n';
   confirmMsg += '日期：' + (rec.date || '-') + '\n';
-  confirmMsg += '类型：' + (isDLE ? 'DLE分析' : '产值分析') + '\n';
   if (!isDLE) {
     confirmMsg += '目标产值：' + (rec.targetValue || 0) + ' 万元\n';
     confirmMsg += '实际产值：' + (rec.actualValue || 0) + ' 万元\n';
@@ -1724,33 +1731,57 @@ function deleteCloudRecord(indexStr) {
     confirmMsg += '异常原因：' + rec.abnormalReasons.map(function(a) { return a.reason + '(' + a.hours + 'h)'; }).join('、') + '\n';
   }
   if (!confirm(confirmMsg)) return;
-  // Build new records array without this item
-  var newRecords = [];
-  for (var i = 0; i < cloudRecordsCache.length; i++) {
-    if (i !== idx) newRecords.push(cloudRecordsCache[i]);
-  }
   var content = document.getElementById('cloud-data-content');
   if (content) content.innerHTML = '<div style="text-align:center;padding:40px 0;color:#6B7280;">正在删除...</div>';
-  var xhr = new XMLHttpRequest();
-  xhr.open('PUT', JSONBIN_BASE_URL, true);
-  xhr.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
-  xhr.setRequestHeader('Content-Type', 'application/json');
-  xhr.timeout = 15000;
-  xhr.onload = function() {
-    if (xhr.status >= 200 && xhr.status < 300) {
-      cloudRecordsCache = newRecords;
-      cloudDashboardRecords = newRecords;
-      showAdminPanel(); // refresh admin panel
-    } else {
-      if (content) content.innerHTML = '<div style="color:#DC2626;padding:20px 0;">删除失败 (HTTP ' + xhr.status + ')</div>' +
+  // Delete the team+date record from EVERY bin that stores it (main bin +
+  // the record's month archive bins). Never rewrite the whole merged cache
+  // into the main bin — that would exceed its 100KB limit (HTTP 403/400).
+  var targets = [{ url: JSONBIN_BASE_URL }];
+  var mo = (rec.date || '').slice(0, 7);
+  if (ARCHIVE_BINS[mo]) {
+    getArchiveUrls(mo).forEach(function(u) { targets.push({ url: u }); });
+  }
+  var pending = targets.length;
+  var failMsg = null;
+  var finish = function() {
+    if (failMsg) {
+      if (content) content.innerHTML = '<div style="color:#DC2626;padding:20px 0;">' + failMsg + '</div>' +
         '<button data-action="backToCloudData" style="margin-top:12px;padding:8px 24px;border-radius:8px;border:1.5px solid #D1D5DB;background:#fff;color:#374151;font-size:12px;font-weight:600;cursor:pointer;">返回</button>';
+      return;
     }
+    // Remove from cache and refresh admin panel
+    cloudRecordsCache = cloudRecordsCache.filter(function(r) {
+      return !(r.teamName === rec.teamName && r.date === rec.date);
+    });
+    cloudDashboardRecords = cloudDashboardRecords.filter(function(r) {
+      return !(r.teamName === rec.teamName && r.date === rec.date);
+    });
+    showAdminPanel();
   };
-  xhr.onerror = function() {
-    if (content) content.innerHTML = '<div style="color:#DC2626;">网络错误</div>' +
-      '<button data-action="backToCloudData" style="margin-top:12px;padding:8px 24px;border-radius:8px;border:1.5px solid #D1D5DB;background:#fff;color:#374151;font-size:12px;font-weight:600;cursor:pointer;">返回</button>';
-  };
-  xhr.send(JSON.stringify({ records: newRecords }));
+  targets.forEach(function(t) {
+    fetchBinRecords(t.url, 0, function(ok, recs) {
+      if (!ok) { failMsg = failMsg || ('删除失败：无法访问云端存储'); pending--; if (pending === 0) finish(); return; }
+      var fIdx = -1;
+      for (var i = 0; i < recs.length; i++) {
+        if (recs[i].teamName === rec.teamName && recs[i].date === rec.date) { fIdx = i; break; }
+      }
+      if (fIdx < 0) { pending--; if (pending === 0) finish(); return; }
+      recs.splice(fIdx, 1);
+      var xhr = new XMLHttpRequest();
+      xhr.open('PUT', t.url, true);
+      xhr.setRequestHeader('X-Master-Key', JSONBIN_API_KEY);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.timeout = 15000;
+      xhr.onload = function() {
+        if (xhr.status < 200 || xhr.status >= 300) failMsg = failMsg || ('删除失败 (HTTP ' + xhr.status + ')');
+        pending--;
+        if (pending === 0) finish();
+      };
+      xhr.onerror = function() { failMsg = failMsg || '删除失败：网络错误'; pending--; if (pending === 0) finish(); };
+      xhr.ontimeout = function() { failMsg = failMsg || '删除失败：请求超时'; pending--; if (pending === 0) finish(); };
+      xhr.send(JSON.stringify({ records: recs }));
+    });
+  });
 }
 
 function formatReasonDetail(a) {
