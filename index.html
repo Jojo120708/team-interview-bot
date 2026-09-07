@@ -4128,9 +4128,9 @@ function drawReasonsChart(data) {
     return;
   }
 
-  const centerX = w / 2 - 40;
+  const centerX = w / 2 - 110;
   const centerY = h / 2;
-  const outerR = Math.min(w, h) / 2 - 30;
+  const outerR = Math.min(w / 2 - 110, h / 2) - 20;
   const innerR = outerR * 0.6;
   const total = data.reduce((s, d) => s + d.value, 0);
 
@@ -4146,16 +4146,6 @@ function drawReasonsChart(data) {
     ctx.closePath();
     ctx.fill();
 
-    // Label
-    const midAngle = startAngle + sliceAngle / 2;
-    const labelR = outerR + 15;
-    const labelX = centerX + Math.cos(midAngle) * labelR;
-    const labelY = centerY + Math.sin(midAngle) * labelR;
-    ctx.fillStyle = "#374151";
-    ctx.font = "11px sans-serif";
-    ctx.textAlign = midAngle > Math.PI / 2 && midAngle < Math.PI * 1.5 ? "right" : "left";
-    ctx.fillText(d.name + " " + ((d.value/total)*100).toFixed(0) + "%", labelX, labelY);
-
     startAngle = endAngle;
   });
 
@@ -4167,6 +4157,31 @@ function drawReasonsChart(data) {
   ctx.fillStyle = "#6B7280";
   ctx.font = "11px sans-serif";
   ctx.fillText("总损失工时", centerX, centerY + 22);
+
+  // Right-side legend: each reason with color swatch, name, percentage and hours
+  const sortedLegend = data.slice().sort((a, b) => b.value - a.value);
+  const legendX = centerX + outerR + 55;
+  const lineH = 26;
+  const legendTop = centerY - (sortedLegend.length - 1) * lineH / 2;
+  ctx.textAlign = "left";
+  sortedLegend.forEach((d, i) => {
+    const ly = legendTop + i * lineH;
+    // color swatch
+    ctx.fillStyle = REASON_COLORS[d.name] || "#6B7280";
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(legendX, ly - 6, 12, 12, 3); else ctx.rect(legendX, ly - 6, 12, 12);
+    ctx.fill();
+    // name
+    ctx.fillStyle = "#374151";
+    ctx.font = "12px sans-serif";
+    ctx.fillText(d.name, legendX + 18, ly + 4);
+    // percentage + hours (right-aligned within legend)
+    ctx.fillStyle = "#6B7280";
+    ctx.font = "12px sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(((d.value/total)*100).toFixed(0) + '% · ' + Math.round(d.value) + 'h', legendX + 175, ly + 4);
+    ctx.textAlign = "left";
+  });
 }
 
 // Polyfill for roundRect
